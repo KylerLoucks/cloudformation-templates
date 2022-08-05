@@ -1,0 +1,98 @@
+
+Description:  S3 Bucket Using a custom Resource
+Resources:
+  objectstorage:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+  DeleteObjectStorage:
+    Type: "Custom::S3DeleteObjectsLambda"
+    Properties:
+      ServiceToken: !GetAtt DeleteS3ObjectsFunction.Arn
+      Bucket: !Ref objectstorage
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        -
+          PolicyName: S3Access
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Sid: AllowLogging
+                Effect: Allow
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: "*"
+              -
+                Sid: DeleteBucketObjects
+                Effect: Allow
+                Action:
+                  - "s3:ListBucket"
+                  - "s3:ListBucketVersions"
+                  - "s3:GetObject"
+                  - "s3:DeleteObject"
+                  - "s3:DeleteObjectVersion"
+                Resource:
+                  - !Sub "arn:aws:s3:::${objectstorage}"
+                  - !Sub "arn:aws:s3:::${objectstorage}/*"
+  DeleteS3ObjectsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Deletes objects from buckets provisioned by CloudFormation
+      Handler: index.handler
+      Runtime: python3.9
+      Role: !GetAtt LambdaRole.Arn
+      Timeout: 120
+      Code:
+        ZipFile: |
+          import os 
+          import json
+          import cfnresponse
+          import boto3
+          import logging
+
+          from botocore.exceptions import ClientError
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          s3 = boto3.resource('s3')
+
+          def handler(event, context):
+            logger.info("Received event: %s" % json.dumps(event))
+            bucket = s3.Bucket(event['ResourceProperties']['Bucket'])
+
+            result = cfnresponse.SUCCESS
+
+            try:
+              if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':
+                result = cfnresponse.SUCCESS
+              elif event['RequestType'] == 'Delete':
+                result = delete_objects(bucket)
+            except ClientError as e:
+              logger.error('Error: %s', e)
+              result = cfnresponse.FAILED
+
+            cfnresponse.send(event, context, result, {})
+
+          def delete_objects(bucket):        
+            bucket.object_versions.delete()
+            bucket.objects.all().delete()
+            return cfnresponse.SUCCESS
+
+
+
+
