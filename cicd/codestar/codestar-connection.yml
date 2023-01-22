@@ -49,5 +49,6 @@ Outputs:
     Description: ARN of the CodeStar Connection.
     Value: !Ref codestarConnection
   connectionStatus:
+    # Shows the status of the connection (PENDING, AVAILABLE)
     Description: Status of the connection.
     Value: !GetAtt codestarConnection.ConnectionStatus
