@@ -1,0 +1,84 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Creates a CodePipeline that deploys to an S3 bucket.
+
+
+Resources:
+  codePipeline: 
+    Type: AWS::CodePipeline::Pipeline 
+    Properties: 
+      RoleArn:
+        Ref: CodePipelineServiceRole 
+      Stages: 
+        - 
+          Name: Source 
+          Actions: 
+            - 
+              Name: SourceAction
+              ActionTypeId: 
+                Category: Source 
+                Owner: AWS 
+                Version: 1 
+                Provider: CodeStarSourceConnection 
+              OutputArtifacts: 
+                - 
+                  Name: SourceOutput 
+              Configuration: 
+                S3Bucket: 
+                  Ref: SourceS3Bucket 
+                S3ObjectKey: 
+                  Ref: SourceS3ObjectKey 
+              RunOrder: 1 
+        - 
+          Name: Beta 
+          Actions: 
+            - 
+              Name: BetaAction 
+              InputArtifacts: 
+                -
+                  Name: SourceOutput 
+              ActionTypeId: 
+                Category: Deploy 
+                Owner: AWS 
+                Version: 1 
+                Provider: CodeDeploy
+              Configuration: 
+                ApplicationName: 
+                  Ref: ApplicationName 
+                DeploymentGroupName: 
+                  Ref: DeploymentGroupName 
+              RunOrder: 1 
+        - 
+          Name: Release 
+          Actions: 
+            - 
+              Name: ReleaseAction
+              InputArtifacts: 
+                - 
+                  Name: SourceOutput 
+              ActionTypeId: 
+                Category: Deploy 
+                Owner: AWS 
+                Version: 1
+                Provider: CodeDeploy 
+              Configuration: 
+                ApplicationName: 
+                  Ref: ApplicationName
+                DeploymentGroupName: 
+                  Ref: DeploymentGroupName 
+              RunOrder: 1 
+      ArtifactStore: 
+        Type: S3 
+        Location:
+          Ref: ArtifactStoreS3Location 
+        EncryptionKey:
+          Id: arn:aws:kms:useast-1:ACCOUNT-ID:key/KEY-ID
+          Type: KMS
+      DisableInboundStageTransitions: 
+        - 
+          StageName: Release 
+          Reason: "Disabling the transition until integration tests are completed"
+      Tags:
+        - Key: Project
+          Value: ProjectA
+        - Key: IsContainerBased
+          Value: 'true'
