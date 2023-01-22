@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: This template creates a CodeStar connection to use for connecting external source providers with services like AWS CodePipeline.
+
+Parameters:
+  # CodeStar Connection parameters
+  pConnectionName:
+    Type: String
+    Description: Name of the connection.
+  pConnectionType:
+    Type: String
+    Description: Type of source control repository to attach the connection to.
+    Default: GitHub
+    AllowedValues: 
+      - Bitbucket
+      - GitHub
+      - GitHubEnterpriseServer
+
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterLabels:
+      pConnectionName:
+        default: CodeStar Connection Name (e.g. my-github-repository).
+      pConnectionType:
+        default: Type
+    
+    ParameterGroups:
+      - Label:
+          default: CodeStar Connection Settings
+        Parameters:
+          - pConnectionName
+          - pConnectionType
+
+
+Resources:
+  codestarConnection:
+    Type: AWS::CodeStarConnections::Connection
+    Properties:
+      ConnectionName: !Ref pConnectionName
+      ProviderType: !Ref pConnectionType
+      Tags:
+        - Key: Name
+          Value: !Ref pConnectionName
+        - Key: Type
+          Value: !Ref pConnectionType
+
+Outputs:
+  onnectionArn:
+    Description: ARN of the CodeStar Connection.
+    Value: !Ref codestarConnection
+  connectionStatus:
+    Description: Status of the connection.
+    Value: !GetAtt codestarConnection.ConnectionStatus
