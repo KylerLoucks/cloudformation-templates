@@ -136,7 +136,7 @@ Resources:
                 Version: 1
               Configuration:
                 CustomData: "Please approve this change. Commit message: #{SourceVariables.CommitMessage}"
-                ExternalEntityLink: !Sub "https://github.com/${pRepoOwner}/${pRepoName}/#{SourceVariables.CommitId}"
+                ExternalEntityLink: !Sub "https://github.com/${pRepoOwner}/${pRepoName}/commit/#{SourceVariables.CommitId}"
         - Name: Deploy
           Actions:
             - Name: S3
