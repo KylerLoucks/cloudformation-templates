@@ -1,6 +1,14 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: Creates a CodePipeline that deploys to an S3 bucket.
 
+Parameters:
+
+  # *** This value must always be passed in when creating / updating stack
+  # "NoEcho" is set to true, for security, so token won't be visible when examining the resulting stack
+  pGitHubOauthToken:
+    Type: String
+    Description: Token needs repo and webhook access. https://docs.aws.amazon.com/codepipeline/latest/userguide/GitHub-create-personal-token-CLI.html
+    NoEcho: true
 
 Resources:
   codePipeline: 
@@ -9,25 +17,45 @@ Resources:
       RoleArn:
         Ref: CodePipelineServiceRole 
       Stages: 
-        - 
-          Name: Source 
+        - Name: Source 
           Actions: 
-            - 
-              Name: SourceAction
+            - Name: SourceAction
               ActionTypeId: 
-                Category: Source 
-                Owner: AWS 
-                Version: 1 
-                Provider: CodeStarSourceConnection 
-              OutputArtifacts: 
-                - 
-                  Name: SourceOutput 
+
+                # Type of Action (e.g. Source, Build, Invoke, Deploy) https://docs.aws.amazon.com/codepipeline/latest/userguide/integrations-action-type.html
+                Category: Source
+                Owner: ThirdParty 
+
+                # depends on 'Owner' (e.g. ThirdParty) https://docs.aws.amazon.com/codepipeline/latest/userguide/reference-pipeline-structure.html#reference-action-artifacts
+                Provider: Github
+                Version: 1
+
+              # https://docs.aws.amazon.com/codepipeline/latest/userguide/appendix-github-oauth.html#action-reference-GitHub-config
               Configuration: 
-                S3Bucket: 
-                  Ref: SourceS3Bucket 
-                S3ObjectKey: 
-                  Ref: SourceS3ObjectKey 
-              RunOrder: 1 
+                Owner: MyGitHubAccountName
+                Repo: MyGitHubRepositoryName
+                PollForSourceChanges: false
+                Branch: master
+                OAuthToken: !Ref pGitHubOAuthToken
+              OutputArtifacts: 
+                - Name: SourceOutput 
+            - Name: Deploy
+              Actions:
+                - Name: S3
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Provider: S3
+                    Version: 1
+                  Configuration:
+                    ClusterName: !Ref pDeploymentBucketName
+                    ServiceName: !Ref pEcsServiceName
+                    FileName: !Ref pImageDefinitionFile
+                  InputArtifacts:
+                    - Name: SourceOutput
+        
+        
+        
         - 
           Name: Beta 
           Actions: 
@@ -68,8 +96,7 @@ Resources:
               RunOrder: 1 
       ArtifactStore: 
         Type: S3 
-        Location:
-          Ref: ArtifactStoreS3Location 
+        Location: !Ref ArtifactStoreS3Location 
         EncryptionKey:
           Id: arn:aws:kms:useast-1:ACCOUNT-ID:key/KEY-ID
           Type: KMS
@@ -82,3 +109,17 @@ Resources:
           Value: ProjectA
         - Key: IsContainerBased
           Value: 'true'
+
+  s3ArtifactBucketCodePipeline:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub codepipeline-artifacts-${AWS::Region}-${AWS::AccountId}
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: environment
+          Value: !Ref pEnvironmentTag

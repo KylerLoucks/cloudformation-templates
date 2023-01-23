@@ -1,0 +1,178 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Creates a CodePipeline that deploys to an S3 bucket. Uses GitHub version 2 source action. Requires 'codestar-connection.yml' template to be deployed and configured first.
+
+Parameters:
+  pDeploymentBucketName:
+    Type: String
+    Description: S3 bucket to deploy new changes to.
+
+  pBranchName:
+    Type: String
+    Description: Version control branch that will trigger the pipeline.
+    Default: master
+
+  pRepoOwner:
+    Type: String
+    Description: If the repo owner is an organization, enter organization name.
+    Default: KylerLoucks
+
+  pRepoName:
+    Type: String
+    Description: Name of the repository.
+    Default: slack-notification-pipeline
+
+
+Resources:
+
+  # CodePipeline IAM Role
+  codePipelineServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub codepipeline-role-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codepipeline.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: s3Artifacts
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource: 
+                  - !Sub "arn:aws:s3:::${s3ArtifactBucketCodePipeline}"
+                  - !Sub "arn:aws:s3:::${s3ArtifactBucketCodePipeline}/*"
+        # - PolicyName: codeBuildTrigger
+        #   PolicyDocument:
+        #     Version: 2012-10-17
+        #     Statement:
+        #       - Effect: Allow
+        #         Action:
+        #           - codebuild:BatchGetBuilds
+        #           - codebuild:StartBuild
+        #           - codebuild:BatchGetBuildBatches
+        #           - codebuild:StartBuildBatch
+        #         Resource: 
+        #           - !GetAtt codeBuildProject.Arn
+        - PolicyName: codeStarConnection
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codestar-connections:UseConnection
+                Resource: "*"
+        - PolicyName: iamPassRole
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: 
+                  - "*"
+            #       "Condition": {
+            #     "StringEqualsIfExists": {
+            #         "iam:PassedToService": [
+            #             "cloudformation.amazonaws.com",
+            #             "elasticbeanstalk.amazonaws.com",
+            #             "ec2.amazonaws.com",
+            #             "ecs-tasks.amazonaws.com"
+            #         ]
+            #     }
+            # }
+
+  codePipeline: 
+    Type: AWS::CodePipeline::Pipeline 
+    Properties: 
+      RoleArn: !GetAtt codePipelineServiceRole.Arn
+      Stages: 
+        - Name: Source
+          Actions: 
+            - Name: SourceAction
+              # Variables to be referenced in other Actions. Ex: #{SourceVariables.CommitId} https://docs.aws.amazon.com/codepipeline/latest/userguide/reference-variables.html
+              Namespace: SourceVariables
+              ActionTypeId: 
+                # Type of Action (e.g. Source, Build, Invoke, Deploy) https://docs.aws.amazon.com/codepipeline/latest/userguide/integrations-action-type.html
+                Category: Source
+                Owner: AWS
+                # depends on 'Owner' https://docs.aws.amazon.com/codepipeline/latest/userguide/reference-pipeline-structure.html#reference-action-artifacts
+                Provider: CodeStarSourceConnection
+                Version: 1
+
+              # CodeStar Source Connection: https://docs.aws.amazon.com/codepipeline/latest/userguide/action-reference-CodestarConnectionSource.html
+              Configuration:
+                # arn:aws:codestar-connections:us-east-1:account-id:connection/e341bf9a-e456-497e-bde3-6a695322853a
+                # Import value from codestar-connection.yml template
+                ConnectionArn: !ImportValue CODESTARCONNECTION
+                
+                # Owner and Name of the repository ex: some-user/my-repo
+                FullRepositoryId: !Sub ${pRepoOwner}/${pRepoName}
+                BranchName: !Ref pBranchName
+                OutputArtifactFormat: CODE_ZIP
+
+                # Run the pipeline on every new commit to the specified branch
+                DetectChanges: true
+              OutputArtifacts:
+                - Name: SourceOutput 
+            
+          # Manual Approval URL with output variables: https://docs.aws.amazon.com/codepipeline/latest/userguide/actions-variables.html#actions-variables-examples-approvals
+        - Name: Approval
+          Actions:
+            - Name: ManualApproval
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: 1
+              Configuration:
+                CustomData: "Please approve this change. Commit message: #{SourceVariables.CommitMessage}"
+                ExternalEntityLink: !Sub "https://github.com/${pRepoOwner}/${pRepoName}/commit/#{SourceVariables.CommitId}"
+        - Name: Deploy
+          Actions:
+            - Name: S3
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: S3
+                Version: 1
+              Configuration:
+                BucketName: !Ref pDeploymentBucketName
+                Extract: true
+              InputArtifacts:
+                - Name: SourceOutput
+      ArtifactStore: 
+        Type: S3 
+        Location: !Ref s3ArtifactBucketCodePipeline 
+        # EncryptionKey:
+        #   Id: arn:aws:kms:useast-1:ACCOUNT-ID:key/KEY-ID
+        #   Type: KMS
+      # DisableInboundStageTransitions:
+      #   - StageName: Release 
+      #     Reason: "Disabling the transition until integration tests are completed"
+
+  s3ArtifactBucketCodePipeline:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub codepipeline-artifacts-${AWS::Region}-${AWS::AccountId}
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+Outputs:
+
+  Version:
+    Description: Template Version
+    Value: pipeline-deploy-s3-0.1
