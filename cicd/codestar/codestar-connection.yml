@@ -48,6 +48,11 @@ Outputs:
   onnectionArn:
     Description: ARN of the CodeStar Connection.
     Value: !Ref codestarConnection
+
+    # Export for Cross-Stack References
+    Export:
+      Name: CODESTARCONNECTION
+      
   connectionStatus:
     # Shows the status of the connection (PENDING, AVAILABLE)
     Description: Status of the connection.

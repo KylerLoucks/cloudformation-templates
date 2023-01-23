@@ -21,24 +21,32 @@ Resources:
           Actions: 
             - Name: SourceAction
               ActionTypeId: 
-
                 # Type of Action (e.g. Source, Build, Invoke, Deploy) https://docs.aws.amazon.com/codepipeline/latest/userguide/integrations-action-type.html
                 Category: Source
-                Owner: ThirdParty 
+                Owner: AWS 
+
+                # Variables to be referenced in other Actions. Ex: #{SourceVariables.commitId} https://docs.aws.amazon.com/codepipeline/latest/userguide/reference-variables.html
+                Namespace: SourceVariables
 
                 # depends on 'Owner' (e.g. ThirdParty) https://docs.aws.amazon.com/codepipeline/latest/userguide/reference-pipeline-structure.html#reference-action-artifacts
-                Provider: Github
+                Provider: CodeStarSourceConnection
                 Version: 1
 
-              # https://docs.aws.amazon.com/codepipeline/latest/userguide/appendix-github-oauth.html#action-reference-GitHub-config
-              Configuration: 
-                Owner: MyGitHubAccountName
-                Repo: MyGitHubRepositoryName
-                PollForSourceChanges: false
-                Branch: master
-                OAuthToken: !Ref pGitHubOAuthToken
+              # CodeStar Source Connection: https://docs.aws.amazon.com/codepipeline/latest/userguide/action-reference-CodestarConnectionSource.html
+              Configuration:
+                # arn:aws:codestar-connections:us-east-1:account-id:connection/e341bf9a-e456-497e-bde3-6a695322853a
+                # Import value from codestar-connection.yml template
+                ConnectionArn: !ImportValue CODESTARCONNECTION
+                
+                # Owner and Name of the repository
+                FullRepositoryId: some-user/my-repo
+                BranchName: master
+                OutputArtifactFormat: CODE_ZIP
               OutputArtifacts: 
                 - Name: SourceOutput 
+            
+            # Manual Approval URL with output variables: https://docs.aws.amazon.com/codepipeline/latest/userguide/actions-variables.html#actions-variables-examples-approvals
+            
             - Name: Deploy
               Actions:
                 - Name: S3
@@ -53,47 +61,6 @@ Resources:
                     FileName: !Ref pImageDefinitionFile
                   InputArtifacts:
                     - Name: SourceOutput
-        
-        
-        
-        - 
-          Name: Beta 
-          Actions: 
-            - 
-              Name: BetaAction 
-              InputArtifacts: 
-                -
-                  Name: SourceOutput 
-              ActionTypeId: 
-                Category: Deploy 
-                Owner: AWS 
-                Version: 1 
-                Provider: CodeDeploy
-              Configuration: 
-                ApplicationName: 
-                  Ref: ApplicationName 
-                DeploymentGroupName: 
-                  Ref: DeploymentGroupName 
-              RunOrder: 1 
-        - 
-          Name: Release 
-          Actions: 
-            - 
-              Name: ReleaseAction
-              InputArtifacts: 
-                - 
-                  Name: SourceOutput 
-              ActionTypeId: 
-                Category: Deploy 
-                Owner: AWS 
-                Version: 1
-                Provider: CodeDeploy 
-              Configuration: 
-                ApplicationName: 
-                  Ref: ApplicationName
-                DeploymentGroupName: 
-                  Ref: DeploymentGroupName 
-              RunOrder: 1 
       ArtifactStore: 
         Type: S3 
         Location: !Ref ArtifactStoreS3Location 
@@ -101,14 +68,11 @@ Resources:
           Id: arn:aws:kms:useast-1:ACCOUNT-ID:key/KEY-ID
           Type: KMS
       DisableInboundStageTransitions: 
-        - 
-          StageName: Release 
+        - StageName: Release 
           Reason: "Disabling the transition until integration tests are completed"
       Tags:
         - Key: Project
           Value: ProjectA
-        - Key: IsContainerBased
-          Value: 'true'
 
   s3ArtifactBucketCodePipeline:
     Type: AWS::S3::Bucket
