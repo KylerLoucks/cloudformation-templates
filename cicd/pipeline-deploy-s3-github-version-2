@@ -51,6 +51,18 @@ Resources:
                 Resource: 
                   - !Sub "arn:aws:s3:::${s3ArtifactBucketCodePipeline}"
                   - !Sub "arn:aws:s3:::${s3ArtifactBucketCodePipeline}/*"
+        - PolicyName: s3DeploymentBucket
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource: 
+                  - !Sub "arn:aws:s3:::${pDeploymentBucketName}"
+                  - !Sub "arn:aws:s3:::${pDeploymentBucketName}/*"
         # - PolicyName: codeBuildTrigger
         #   PolicyDocument:
         #     Version: 2012-10-17
@@ -160,6 +172,9 @@ Resources:
       #   - StageName: Release 
       #     Reason: "Disabling the transition until integration tests are completed"
 
+
+
+  # Maybe remove this and use a bucket as a parameter?
   s3ArtifactBucketCodePipeline:
     Type: AWS::S3::Bucket
     Properties:
@@ -170,8 +185,89 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
+  
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-codestarnotifications-notificationrule.html
+  codePipelineNotificationRule:
+    Type: AWS::CodeStarNotifications::NotificationRule
+    Properties: 
+      # CreatedBy: String
+      DetailType: FULL
+      # EventTypeId: String
+
+      # Event type IDs -> https://docs.aws.amazon.com/dtconsole/latest/userguide/concepts.html#concepts-api
+      EventTypeIds: 
+        - codepipeline-pipeline-pipeline-execution-started
+        - codepipeline-pipeline-manual-approval-needed
+        - codepipeline-pipeline-manual-approval-failed
+        - codepipeline-pipeline-manual-approval-succeeded
+      # Notification Rule Name must be unique
+      Name: !Sub cloudformation-repository-${AWS::Region}
+      # ARN of the Resource to associate the notification rule with.
+      Resource: !Sub "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${codePipeline}"
+      Status: ENABLED
+      # Tags: Json
+      # ARN of AWS Chatbot clients or SNS topics
+      Targets: 
+        - TargetType: AWSChatbotSlack
+          TargetAddress: !Ref chatBot
+  
+  # (Notification permissions) NotificationsOnly-Role
+  chatBotIAMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub AWSChatbot-role-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - chatbot.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: ChatbotNotificationsOnly
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:Describe*
+                  - cloudwatch:Get*
+                  - cloudwatch:List*
+                Resource: "*"
+
+  # Requires additonal setup in the console (Create Chatbot client)
+  chatBot:
+    Type: AWS::Chatbot::SlackChannelConfiguration
+    Properties: 
+      ConfigurationName: cloudformation-templates-repository
+
+      # AdministratorAccess is applied by default if this is left omitted:
+      # GuardrailPolicies: 
+      #   - String
+      IamRoleArn: !GetAtt chatBotIAMRole.Arn
+      # LoggingLevel: String
+
+      # Open slack, right click channel name choose Copy Link. ID is 9 digit string at the end of the URL.
+      # If the slack channel is Private, invite the AWS Chatbot to the channel
+      SlackChannelId: C04L82623SQ
+
+      # Copy and paste the workspace ID from the browser ( e.g. https://app.slack.com/client/<workspace-id>/<channel-id> )
+      SlackWorkspaceId: TLWDWSJJK
+      # SnsTopicArns: 
+      #   - String
+      UserRoleRequired: false
 
 Outputs:
+
+  Pipeline:
+    Description: CodePipeline CI/CD pipeline Name
+    Value: !Ref codePipeline
+  
+  chatBotArn:
+    Description: AWS Chatbot ARN
+    Value: !Ref chatBot
 
   Version:
     Description: Template Version

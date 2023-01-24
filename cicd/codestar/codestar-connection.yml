@@ -22,7 +22,7 @@ Metadata:
       pConnectionName:
         default: CodeStar Connection Name (e.g. my-github-repository).
       pConnectionType:
-        default: Type
+        default: External provider to make the connection to. 
     
     ParameterGroups:
       - Label:
