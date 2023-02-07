@@ -2,13 +2,13 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: Creates a CodePipeline that deploys to an S3 bucket. Uses GitHub version 2 source action. Requires 'codestar-connection.yml' template to be deployed and configured first.
 
 Parameters:
-  pDeploymentBucketName:
+  pDevBucketName:
     Type: String
-    Description: S3 bucket to deploy new changes to.
+    Description: Name of the DEV S3 bucket to deploy new changes to.
 
   pBranchName:
     Type: String
-    Description: Version control branch that will trigger the pipeline.
+    Description: Name of the branch that merges will trigger the pipeline.
     Default: master
 
   pRepoOwner:
@@ -61,8 +61,8 @@ Resources:
                   - s3:GetObject
                   - s3:GetObjectVersion
                 Resource: 
-                  - !Sub "arn:aws:s3:::${pDeploymentBucketName}"
-                  - !Sub "arn:aws:s3:::${pDeploymentBucketName}/*"
+                  - !Sub "arn:aws:s3:::${pDevBucketName}"
+                  - !Sub "arn:aws:s3:::${pDevBucketName}/*"
         # - PolicyName: codeBuildTrigger
         #   PolicyDocument:
         #     Version: 2012-10-17
@@ -138,7 +138,7 @@ Resources:
                 - Name: SourceOutput 
             
           # Manual Approval URL with output variables: https://docs.aws.amazon.com/codepipeline/latest/userguide/actions-variables.html#actions-variables-examples-approvals
-        - Name: Approval
+        - Name: DEV-Approval
           Actions:
             - Name: ManualApproval
               ActionTypeId:
@@ -149,7 +149,7 @@ Resources:
               Configuration:
                 CustomData: "Please approve this change. Commit message: #{SourceVariables.CommitMessage}"
                 ExternalEntityLink: !Sub "https://github.com/${pRepoOwner}/${pRepoName}/commit/#{SourceVariables.CommitId}"
-        - Name: Deploy
+        - Name: DEV-Deploy
           Actions:
             - Name: S3
               ActionTypeId:
@@ -158,7 +158,7 @@ Resources:
                 Provider: S3
                 Version: 1
               Configuration:
-                BucketName: !Ref pDeploymentBucketName
+                BucketName: !Ref pDevBucketName
                 Extract: true
               InputArtifacts:
                 - Name: SourceOutput
@@ -190,26 +190,26 @@ Resources:
   codePipelineNotificationRule:
     Type: AWS::CodeStarNotifications::NotificationRule
     Properties: 
-      # CreatedBy: String
       DetailType: FULL
-      # EventTypeId: String
-
       # Event type IDs -> https://docs.aws.amazon.com/dtconsole/latest/userguide/concepts.html#concepts-api
       EventTypeIds: 
         - codepipeline-pipeline-pipeline-execution-started
         - codepipeline-pipeline-manual-approval-needed
         - codepipeline-pipeline-manual-approval-failed
         - codepipeline-pipeline-manual-approval-succeeded
+        
       # Notification Rule Name must be unique
       Name: !Sub cloudformation-repository-${AWS::Region}
+
       # ARN of the Resource to associate the notification rule with.
       Resource: !Sub "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${codePipeline}"
       Status: ENABLED
-      # Tags: Json
+      
       # ARN of AWS Chatbot clients or SNS topics
       Targets: 
         - TargetType: AWSChatbotSlack
           TargetAddress: !Ref chatBot
+      # Tags: Json
   
   # (Notification permissions) NotificationsOnly-Role
   chatBotIAMRole:
@@ -237,7 +237,7 @@ Resources:
                   - cloudwatch:List*
                 Resource: "*"
 
-  # Requires additonal setup in the console (Create Chatbot client)
+  # Requires additonal setup in the console (Create Chatbot client manually in AWS console)
   chatBot:
     Type: AWS::Chatbot::SlackChannelConfiguration
     Properties: 
@@ -253,10 +253,9 @@ Resources:
       # If the slack channel is Private, invite the AWS Chatbot to the channel
       SlackChannelId: C04L82623SQ
 
-      # Copy and paste the workspace ID from the browser ( e.g. https://app.slack.com/client/<workspace-id>/<channel-id> )
+      # Copy and paste the workspace ID from the AWS ChatBot Client Console,
+      # or from the browser ( e.g. https://app.slack.com/client/<workspace-id>/<channel-id> )
       SlackWorkspaceId: TLWDWSJJK
-      # SnsTopicArns: 
-      #   - String
       UserRoleRequired: false
 
 Outputs:
