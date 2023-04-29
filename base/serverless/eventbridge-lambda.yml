@@ -1,0 +1,69 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Simple CRON EventBridge to invoke a lambda function with basic Execution permissions
+  
+Resources:
+  
+  lambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ChimeSDKAPI
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - chime:*
+                Resource: "*"
+
+
+  lambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Sample Lambda # Change this
+      Runtime: python3.9
+      Role: !GetAtt lambdaRole.Arn
+      Environment:
+        Variables:
+          ACCOUNT_ID: !Sub ${AWS::AccountId}
+      Handler: index.handler
+      Timeout: 240
+      Code:
+        ZipFile: !Sub |
+          import boto3
+
+          def handler(event, context):
+            print(event)
+
+  permissionForEventsToInvokeLambda: 
+    Type: AWS::Lambda::Permission
+    Properties: 
+      FunctionName: !Ref lambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: 
+        !GetAtt eventBridgeRule.Arn
+  
+  
+  
+  eventBridgeCronScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub ${AWS::StackName}-rule
+      Description: Invoke Lambda functions on a schedule
+      ScheduleExpression: !Sub cron(0 20 * * ? *)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt lambdaFunction.Arn
+          Id: targetfunction1
