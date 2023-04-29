@@ -47,7 +47,7 @@ Resources:
             print(event)
 
   lambdaLogGroup:
-    Type: "AWS::Logs::LogGroup"
+    Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub /aws/lambda/${lambdaFunction}
       RetentionInDays: 90
