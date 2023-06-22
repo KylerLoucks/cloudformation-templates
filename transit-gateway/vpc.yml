@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Creates a Highly Available VPC with Routes to Transit Gateway.
+
+
+Parameters:
+
+  pOnPremCidr:
+    Type: String
+    Description: On-Prem environment CIDR range (e.g. 10.2.90.0/24)
+    Default: 10.2.90.0/24
+
+  pTransitGWId:
+    Type: String
+    Description: Transit Gateway ID
+    Default: tgw-0246560ce99c2f8fa
+
+Resources:
+
+  # VPC attachment (separate VPC cloudformation template)
+  transitGwVPCAttachment:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties: 
+      # Options: 
+      #   Options
+      TransitGatewayId: !ImportValue TRANSITGATEWAYID
+      #TODO reference VPC resource from same template
+      VpcId: !Ref pVpcId
+
+      #TODO: reference subnets from same template
+      SubnetIds: 
+        - !Ref privateSubnet1
+        - !Ref privateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-VPN
+        - Key: Environment
+          Value: !Ref pEnvironmentTag
+        - Key: Managed-By
+          Value: !Sub cloudformation-${AWS::StackName}
+
+  privateSubnet01TGWRoute:
+    Type: AWS::EC2::Route
+    Properties:
+    #TODO Reference RouteTable from this template
+      RouteTableId: rtb-06bcbbf39875e2253 
+      DestinationCidrBlock: 10.29.0.0/24
+      TransitGatewayId: !ImportValue TRANSITGATEWAYID
+  
+  privateSubnet02TGWRoute:
+    Type: AWS::EC2::Route
+    Properties:
+    #TODO Reference RouteTable from this template
+      RouteTableId: !Ref pPrivateSubnet2RTId
+      DestinationCidrBlock: !Ref pOnPremCidr # 0.0.0.0/0
+      TransitGatewayId: !ImportValue TRANSITGATEWAYID

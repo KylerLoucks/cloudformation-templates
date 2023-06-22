@@ -1,0 +1,207 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Creates a Transit Gateway in your central account.
+
+
+Parameters:
+
+  pCgwIp:
+    Type: String
+    Description: On-prem Firewall public IP/WAN IP (e.g. 12.345.678.910)
+    Default: 66.119.122.106
+    ConstraintDescription: Please enter a valid public IP for the on-prem gateway IP
+
+  pBgpAsn:
+    Type: String
+    Description: Verify if it is the same as on-prem for dynamic routes
+    Default: 65000
+
+  pAmazonSideAsn:
+    Type: Number
+    Default: 64515
+    Description: "NOTE: This cannot be the same as any CGW or other ASN attaching to this TGW"
+
+  pAutoAcceptSharedAttachments:
+    Type: String
+    Description: "Automatically accept shared attachment requests"
+    Default: disable
+    AllowedValues:
+      - disable
+      - enable
+
+  pDefaultRouteTableAssociation:
+    Type: String
+    Description: "Automatically associate to default route table"
+    Default: enable
+    AllowedValues:
+      - disable
+      - enable
+
+  pDnsSupport:
+    Type: String
+    Description: "Provide DNS Support through gateway"
+    Default: enable
+    AllowedValues:
+      - disable
+      - enable
+
+  pVpnEcmpSupport:
+    Type: "String"
+    Description: Equal-cost multi-path routing for VPN Connections that are attached to this Transit Gateway.
+    Default: enable
+    AllowedValues:
+      - disable
+      - enable
+
+  pEnableSharing:
+    Type: String
+    Description: "Optional. Shares the transit gateway with the account numbers that are included."
+    Default: false
+    AllowedValues:
+      - true
+      - false
+
+  # Child accounts to share Transit Gateway via RAM (Resource Access Manager)
+  pAccounts:
+    Type: List<Number>
+    Description: "Child Account Numbers separated by commas"
+    Default: "123456789, 234567890"
+
+  pEnvironmentTag:
+    Type: String
+    Description: Environment type for default resource tagging
+    Default: development
+    AllowedValues:
+      - development
+      - staging
+      - sandbox
+      - production
+      - central
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: # Transit Gateway Configuration
+          default: Customer Gateway Settings
+        Parameters:
+          - pCgwIp
+          - pBgpAsn
+      - Label:
+          default: Transit Gateway Settings
+        Parameters:
+          - pAmazonSideAsn
+          - pAutoAcceptSharedAttachments
+          - pDefaultRouteTableAssociation
+          - pDnsSupport
+          - pVpnEcmpSupport
+      - Label:
+          default: Resource Access Manager
+        Parameters:
+          - pEnableSharing
+          - pAccounts
+      
+    # Parameter Labels
+    ParameterLabels: 
+      pCgwIp:
+        default: Customer GW On-Prem Public IP
+      pBgpAsn:
+        default: BGP ASN
+
+
+Conditions:
+
+  CondCreateShare: !Equals [true, !Ref pEnableSharing]
+  # CondpAccount1: !Equals ["", !Ref pAccount1]
+  # CondpAccount2: !Equals ["", !Ref pAccount2]
+  # CondpAccount3: !Equals ["", !Ref pAccount3]
+  # CondpAccount4: !Equals ["", !Ref pAccount4]
+  # CondpAccount5: !Equals ["", !Ref pAccount5]
+  # CondpAccount6: !Equals ["", !Ref pAccount6]
+  # CondpAccount7: !Equals ["", !Ref pAccount7]
+  # CondpAccount8: !Equals ["", !Ref pAccount8]
+  # CondpAccount9: !Equals ["", !Ref pAccount9]
+  # CondpAccount10: !Equals ["", !Ref pAccount10]
+  # CondpAccount11: !Equals ["", !Ref pAccount11]
+  # CondpAccount12: !Equals ["", !Ref pAccount12]
+  # CondpAccount13: !Equals ["", !Ref pAccount13]
+  # CondpAccount14: !Equals ["", !Ref pAccount14]
+  # CondpAccount15: !Equals ["", !Ref pAccount15]
+
+Resources:
+
+  transitGateway:
+    Type: AWS::EC2::TransitGateway
+    Properties:
+      AmazonSideAsn: !Ref pAmazonSideAsn
+      AutoAcceptSharedAttachments: !Ref pAutoAcceptSharedAttachments
+      DefaultRouteTableAssociation: !Ref pDefaultRouteTableAssociation
+      Description: "Transit Gateway serves as a centralized outgoing gateway for networking traffic"
+      DnsSupport: !Ref pDnsSupport
+      VpnEcmpSupport: !Ref pVpnEcmpSupport
+      Tags:
+        - Key: Name
+          Value: !Ref AWS::StackName
+        - Key: Environment
+          Value: !Ref pEnvironmentTag
+        - Key: Managed-By
+          Value: !Sub cloudformation-${AWS::StackName}
+      
+
+  customerGateway:
+    Type: AWS::EC2::CustomerGateway
+    Properties:
+      BgpAsn: !Ref pBgpAsn
+      # On-Prem public facing IP
+      IpAddress: !Ref pCgwIp
+      Type: ipsec.1
+      Tags:
+        - Key: Name
+          Value: !Sub customer-gateway-01
+        - Key: Environment
+          Value: !Ref pEnvironmentTag
+        - Key: Managed-By
+          Value: !Sub cloudformation-${AWS::StackName}
+      
+  # VPN attachment
+  transitGwVPNAttachment: 
+    Type: AWS::EC2::VPNConnection
+    Properties: 
+      Type: ipsec.1
+      StaticRoutesOnly: false # Dynamic (BGB) route
+      CustomerGatewayId: !Ref customerGateway
+      TransitGatewayId: !Ref transitGateway
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-VPN
+        - Key: Environment
+          Value: !Ref pEnvironmentTag
+        - Key: Managed-By
+          Value: !Sub cloudformation-${AWS::StackName}
+
+  resourceShareTGW:
+    Type: AWS::RAM::ResourceShare
+    Condition: CondCreateShare
+    Properties:
+      Name: !Sub "${AWS::StackName}-rs"
+      ResourceArns:
+        - !Sub "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:transit-gateway/${transitGateway}"
+      Principals: !Ref pAccounts
+
+      Tags:
+      - Key: Application
+        Value: !Ref 'AWS::StackId'
+      - Key: "Environment"
+        Value: !Ref pEnvironmentTag
+      - Key: "Managed-By"
+        Value: "CloudFormation"
+
+
+
+Outputs:
+  TemplateVersion:
+    Value: site-to-site-vpn-1.0
+    Description: Template Version
+  TransitGWId:
+    Value: !Ref transitGateway
+    Description: Transit Gateway Id
+    Export:
+      Name: TRANSITGATEWAYID
