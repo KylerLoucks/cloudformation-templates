@@ -56,7 +56,7 @@ Parameters:
   pBaseEcrRepo:
     Type: String
     Description: ECR Repo Name where base docker image is pushed
-    Default: node
+    Default: ecrrepo
 
   pBaseImageTag:
     Type: String
@@ -74,12 +74,12 @@ Parameters:
   pEcsClusterName:
     Type: String
     Description: ECS Cluster Name
-    Default: sr-ecs-dev
+    Default: ecs-dev
 
   pEcsServiceName:
     Type: String
     Description: ECS Service Name
-    Default: incidentreportapiserver
+    Default: myservice
 
   pContainerName:
     Type: String
@@ -178,7 +178,7 @@ Resources:
 
   # IAM Role - CodeBuild
 
-  roleCodeBuildService:
+  codeBuildServiceRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub ${pApplicationName}-build-role
@@ -214,8 +214,8 @@ Resources:
                   - s3:GetObjectVersion
                   - s3:PutObject
                 Resource:
-                  - !GetAtt s3bucketCodePipeline.Arn
-                  - !Join ["", [!GetAtt s3bucketCodePipeline.Arn , "/*"]]
+                  - !Sub "arn:aws:s3:::${artifactBucket}"
+                  - !Sub "arn:aws:s3:::${artifactBucket}/*"
         - PolicyName: ECR
           PolicyDocument:
             Version: 2012-10-17
@@ -286,7 +286,7 @@ Resources:
           - Name: BASE_IMAGE_TAG 
             Value: !Ref pBaseImageTag 
             Type: PLAINTEXT
-      ServiceRole: !GetAtt roleCodeBuildService.Arn
+      ServiceRole: !GetAtt codeBuildServiceRole.Arn
       Source:
         Type: CODEPIPELINE
         BuildSpec: !Ref pBuildSpecPath
@@ -294,7 +294,7 @@ Resources:
       
   # IAM Role - CodePipeline    
 
-  roleCodePipelineService:
+  codePipelineServiceRole:
       Type: AWS::IAM::Role
       Properties:
         RoleName: !Sub ${pApplicationName}-pipeline-role
@@ -318,8 +318,8 @@ Resources:
                     - s3:GetObject
                     - s3:GetObjectVersion
                   Resource: 
-                    - !GetAtt s3bucketCodePipeline.Arn
-                    - !Join ["", [!GetAtt s3bucketCodePipeline.Arn, "/*"]]
+                    - !Sub "arn:aws:s3:::${artifactBucket}"
+                    - !Sub "arn:aws:s3:::${artifactBucket}/*"
           - PolicyName: codeBuildTrigger
             PolicyDocument:
               Version: 2012-10-17
@@ -330,7 +330,6 @@ Resources:
                     - codebuild:StartBuild
                     - codebuild:BatchGetBuildBatches
                     - codebuild:StartBuildBatch
-                    - codestar-connections:UseConnection
                   Resource: 
                     - !GetAtt codeBuildProject.Arn
                 - Effect: Allow
@@ -346,7 +345,7 @@ Resources:
                   Action:
                     - ecs:*
                     - ecr:*
-                  Resource: 
+                  Resource: artifactBucket
                     - "*"
           - PolicyName: iamPassRole
             PolicyDocument:
@@ -362,7 +361,7 @@ Resources:
       
  # CodePipeline
 
-  s3bucketCodePipeline:
+  artifactBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub ${pApplicationName}-pipeline-artifacts-${AWS::AccountId}-${AWS::Region}
@@ -380,10 +379,10 @@ Resources:
     Type: AWS::CodePipeline::Pipeline
     Properties:
       ArtifactStore:
-        Location: !Ref s3bucketCodePipeline
+        Location: !Ref artifactBucket
         Type: S3
       Name: !Sub ${pApplicationName}-pipeline
-      RoleArn: !GetAtt roleCodePipelineService.Arn
+      RoleArn: !GetAtt codePipelineServiceRole.Arn
       Stages:
         - Name: Source
           Actions:
