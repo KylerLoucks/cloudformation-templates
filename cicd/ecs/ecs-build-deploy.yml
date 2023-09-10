@@ -1,5 +1,6 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: Template has the capability to create a CodeBuild project and CodePipeline related resources with the ECS deployment type.
+Description: > 
+  Github V2 Source action, Build ECR Image, and push to ECS service (in-place).
 
 
 Parameters:
@@ -16,11 +17,11 @@ Parameters:
   pRepoOwner:
     Type: String
     Description: Owner not username. If the repo owner is an organization, enter organization name.
-    Default: SpearmintRhinoIT
+    Default: KylerLoucks
 
   pRepoName:
     Type: String 
-    Default: IncidentReportApiServer
+    Default: my-github-repo
 
   pCodestarConnectionArn:
     Type: String
@@ -30,7 +31,7 @@ Parameters:
   pTriggerBranch:
     Type: String
     Description: Branch to trigger CodePipeline off of.
-    Default: cloud303
+    Default: master
 
   # CodeBuild
 
@@ -56,7 +57,7 @@ Parameters:
   pBaseEcrRepo:
     Type: String
     Description: ECR Repo Name where base docker image is pushed
-    Default: ecrrepo
+    Default: my-base-ecr-repo
 
   pBaseImageTag:
     Type: String
@@ -68,7 +69,7 @@ Parameters:
   pEcrRepo:
     Type: String
     Description: ECR Repo Name
-    Default: incidentreportapiserver
+    Default: my-ecr-repo
 
 
   pEcsClusterName:

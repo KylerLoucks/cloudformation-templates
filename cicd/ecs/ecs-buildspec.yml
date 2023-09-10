@@ -6,15 +6,19 @@ phases:
       docker: 18
   pre_build:
     commands:
+      - echo Listing Source Files...
+      # list all files by most recently modified in reverse order
+      - ls -ltra 
       - echo Logging in to Amazon ECR...
       - $(aws ecr get-login --no-include-email --region $AWS_DEFAULT_REGION)
-      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
-      - IMAGE_TAG=${COMMIT_HASH:=latest}
+      # Use the Commit Hash, Otherwise default to 'latest'
+      - IMAGE_TAG=${$CODEBUILD_RESOLVED_SOURCE_VERSION:-latest}
       - REPOSITORY_URI=$ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPO_NAME
   build:
     commands:
       - echo Build started on `date`
       - echo Building the Docker image...
+      # Passing Dockerfile 'ARG' using --build-arg flag
       - docker build -f docker/Dockerfile --build-arg AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION --build-arg ACCOUNT_ID=$ACCOUNT_ID --build-arg BASE_IMAGE_REPO_NAME=$BASE_IMAGE_REPO_NAME --build-arg BASE_IMAGE_TAG=$BASE_IMAGE_TAG -t $REPOSITORY_URI:latest .
       - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG
   post_build:
@@ -24,7 +28,7 @@ phases:
       - docker push $REPOSITORY_URI:latest
       - docker push $ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPO_NAME:$IMAGE_TAG
       - echo Writing image definitions file...
-      - printf '[{"name":"incidentreportapiserver","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+      - printf '[{"name":"%s","imageUri":"%s"}]' "$CONTAINER_NAME" "$REPOSITORY_URI:$IMAGE_TAG" > imagedefinitions.json
 artifacts:
   files: imagedefinitions.json
  
