@@ -1,0 +1,435 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Template has the capability to create a CodeBuild project and CodePipeline related resources with the ECS deployment type.
+
+
+Parameters:
+
+  # CodePipeline
+
+  pApplicationName:
+    Type: String
+    Description: Used to name CI/CD resources.
+    Default: srirs
+
+  # GitHub Repo
+
+  pRepoOwner:
+    Type: String
+    Description: Owner not username. If the repo owner is an organization, enter organization name.
+    Default: SpearmintRhinoIT
+
+  pRepoName:
+    Type: String 
+    Default: IncidentReportApiServer
+
+  pCodestarConnectionArn:
+    Type: String
+    Description: ARN of the CodeStar Connection.
+    Default: arn:aws:codestar-connections:us-east-1:313588322221:connection/e6cec00c-84fd-4370-b355-5291eaa602bc
+
+  pTriggerBranch:
+    Type: String
+    Description: Branch to trigger CodePipeline off of.
+    Default: cloud303
+
+  # CodeBuild
+
+  pCodeBuildComputeType:
+    Type: String
+    Description: CodeBuild Compute Type
+    Default: BUILD_GENERAL1_SMALL
+    AllowedValues:
+      - BUILD_GENERAL1_SMALL
+      - BUILD_GENERAL1_MEDIUM
+      - BUILD_GENERAL1_LARGE
+
+  pCodeBuildImage:
+    Type: String
+    Description: Base image used by CodeBuild
+    Default: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+
+  pBuildSpecPath:
+    Type: String
+    Description: Path and name for the Buildspec in repo
+    Default: buildspec.yml
+
+  pBaseEcrRepo:
+    Type: String
+    Description: ECR Repo Name where base docker image is pushed
+    Default: node
+
+  pBaseImageTag:
+    Type: String
+    Description: Base Docker Image Tag
+    Default: "16"
+
+  # ECS
+
+  pEcrRepo:
+    Type: String
+    Description: ECR Repo Name
+    Default: incidentreportapiserver
+
+
+  pEcsClusterName:
+    Type: String
+    Description: ECS Cluster Name
+    Default: sr-ecs-dev
+
+  pEcsServiceName:
+    Type: String
+    Description: ECS Service Name
+    Default: incidentreportapiserver
+
+  pContainerName:
+    Type: String
+    Description: Name of Container
+  
+  pImageDefinitionFile:
+    Type: String
+    Description: Image Definition file path
+    Default: imagedefinitions.json
+
+
+  # Tagging
+
+  pEnvironmentTag:
+    Type: String
+    Description: Environment Tag for default resource tagging
+    Default: development
+    AllowedValues:
+      - production
+      - staging
+      - sandbox
+      - test
+      - development
+      - qa
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterLabels:
+      pApplicationName:
+        default: Application Name
+      pRepoOwner:
+        default: GitHub Repository Owner
+      pRepoName:
+        default: GitHub Repository Name
+      pCodestarConnectionArn:
+        default: Codestar Connection Arn
+      pTriggerBranch:
+        default: GitHub Trigger Branch
+      pCodeBuildComputeType:
+        default: CodeBuild Compute Type
+      pCodeBuildImage:
+        default: CodeBuild Docker Image
+      pBuildSpecPath:
+        default: Buildspec file path
+      pBaseEcrRepo: 
+        default: Base ECR Repo  
+      pBaseImageTag:  
+        default: Base Image Tag
+      pEcrRepo:
+        default: Name of ECR Repository
+      pEcsClusterName:
+        default: Name of ECS Cluster
+      pEcsServiceName:
+        default: Name of ECS Service to Update
+      pContainerName:
+        default: Name of Container
+      pImageDefinitionFile:
+        default: Image Definition File Path
+      pEnvironmentTag:
+        default: Environment Tag  
+
+    ParameterGroups:
+      - Label:
+          default: CodePipeline Settings
+        Parameters:
+          - pApplicationName
+      - Label:
+          default: CodePipeline Source Settings
+        Parameters:
+          - pRepoOwner
+          - pRepoName
+          - pCodestarConnectionArn
+          - pTriggerBranch
+      - Label:
+          default: CodeBuild Settings
+        Parameters:
+          - pCodeBuildComputeType
+          - pCodeBuildImage
+          - pBuildSpecPath
+          - pBaseEcrRepo  
+          - pBaseImageTag
+      - Label:
+          default: ECS Settings
+        Parameters:
+          - pEcrRepo
+          - pEcsClusterName
+          - pEcsServiceName
+          - pContainerName
+          - pImageDefinitionFile
+      - Label:
+          default: Tagging
+        Parameters:
+          - pEnvironmentTag
+
+Resources:
+
+  # IAM Role - CodeBuild
+
+  roleCodeBuildService:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${pApplicationName}-build-role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codebuild.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogs
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${pApplicationName}-build
+                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${pApplicationName}-build:*
+        - PolicyName: S3ArtifactBucket
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:PutObject
+                Resource:
+                  - !GetAtt s3bucketCodePipeline.Arn
+                  - !Join ["", [!GetAtt s3bucketCodePipeline.Arn , "/*"]]
+        - PolicyName: ECR
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:PutLifecyclePolicy
+                  - ecr:PutImageTagMutability
+                  - ecr:PutImageScanningConfiguration
+                  - ecr:BatchGetImage
+                  - ecr:CompleteLayerUpload
+                  - ecr:DescribeImages
+                  - ecr:TagResource
+                  - ecr:ListTagsForResource
+                  - ecr:UploadLayerPart
+                  - ecr:InitiateLayerUpload
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:PutImage
+                Resource:
+                  - !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${pEcrRepo}
+        - PolicyName: BASE-ECR  
+          PolicyDocument: 
+            Version: 2012-10-17 
+            Statement:  
+              - Effect: Allow 
+                Action: 
+                  - ecr:BatchGetImage 
+                  - ecr:DescribeImages  
+                  - ecr:ListTagsForResource 
+                  - ecr:GetDownloadUrlForLayer
+                Resource: 
+                  - !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${pBaseEcrRepo}
+        - PolicyName: ECR-Token
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                Resource: "*"
+
+
+  codeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub ${pApplicationName}-build
+      Artifacts:
+        Type: CODEPIPELINE
+      Description: CodeBuild Project
+      Environment:
+        ComputeType: !Ref pCodeBuildComputeType
+        Image: !Ref pCodeBuildImage
+        Type: LINUX_CONTAINER
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - Name: ECR_REPO_NAME
+            Value: !Ref pEcrRepo
+            Type: PLAINTEXT
+          - Name: ACCOUNT_ID
+            Value: !Ref "AWS::AccountId"
+            Type: PLAINTEXT
+          - Name: CONTAINER_NAME
+            Value: !Ref pContainerName
+            Type: PLAINTEXT
+          - Name: BASE_IMAGE_REPO_NAME  
+            Value: !Ref pBaseEcrRepo  
+            Type: PLAINTEXT 
+          - Name: BASE_IMAGE_TAG 
+            Value: !Ref pBaseImageTag 
+            Type: PLAINTEXT
+      ServiceRole: !GetAtt roleCodeBuildService.Arn
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: !Ref pBuildSpecPath
+      TimeoutInMinutes: 60
+      
+  # IAM Role - CodePipeline    
+
+  roleCodePipelineService:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: !Sub ${pApplicationName}-pipeline-role
+        AssumeRolePolicyDocument:
+          Version: 2012-10-17
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - codepipeline.amazonaws.com
+              Action:
+                - sts:AssumeRole
+        Policies:
+          - PolicyName: s3Artifacts
+            PolicyDocument:
+              Version: 2012-10-17
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - s3:PutObject
+                    - s3:GetObject
+                    - s3:GetObjectVersion
+                  Resource: 
+                    - !GetAtt s3bucketCodePipeline.Arn
+                    - !Join ["", [!GetAtt s3bucketCodePipeline.Arn, "/*"]]
+          - PolicyName: codeBuildTrigger
+            PolicyDocument:
+              Version: 2012-10-17
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - codebuild:BatchGetBuilds
+                    - codebuild:StartBuild
+                    - codebuild:BatchGetBuildBatches
+                    - codebuild:StartBuildBatch
+                    - codestar-connections:UseConnection
+                  Resource: 
+                    - !GetAtt codeBuildProject.Arn
+                - Effect: Allow
+                  Action:
+                    - codestar-connections:UseConnection
+                  Resource: 
+                    - "*"
+          - PolicyName: ecsUpdate
+            PolicyDocument:
+              Version: 2012-10-17
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - ecs:*
+                    - ecr:*
+                  Resource: 
+                    - "*"
+          - PolicyName: iamPassRole
+            PolicyDocument:
+              Version: 2012-10-17
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - iam:PassRole
+                  Resource: 
+                    - "*"
+          
+
+      
+ # CodePipeline
+
+  s3bucketCodePipeline:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${pApplicationName}-pipeline-artifacts-${AWS::AccountId}-${AWS::Region}
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: environment
+          Value: !Ref pEnvironmentTag
+
+  codePipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      ArtifactStore:
+        Location: !Ref s3bucketCodePipeline
+        Type: S3
+      Name: !Sub ${pApplicationName}-pipeline
+      RoleArn: !GetAtt roleCodePipelineService.Arn
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: 1
+              Configuration:
+                FullRepositoryId: !Sub ${pRepoOwner}/${pRepoName}
+                ConnectionArn: !Ref pCodestarConnectionArn
+                BranchName: !Ref pTriggerBranch
+              OutputArtifacts:
+                - Name: SourceArtifact
+        - Name: Build
+          Actions:
+            - Name: CodeBuild
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: 1
+              Configuration:
+                ProjectName: !Ref codeBuildProject
+              InputArtifacts:
+                - Name:  SourceArtifact
+              OutputArtifacts:
+                - Name: BuildArtifact
+        - Name: Deploy
+          Actions:
+            - Name: ECS
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: ECS
+                Version: 1
+              Configuration:
+                ClusterName: !Ref pEcsClusterName
+                ServiceName: !Ref pEcsServiceName
+                FileName: !Ref pImageDefinitionFile
+              InputArtifacts:
+                - Name:  BuildArtifact
+
+Outputs:
+
+  Version:
+    Description: Template Version
+    Value: pipeline-build-ecs-0.1

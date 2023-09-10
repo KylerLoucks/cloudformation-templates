@@ -1,0 +1,123 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >
+  Creates an DocumentDB Cluster in the selected subnets with mongo engine.
+
+Parameters:
+
+# Networking
+  pVpcCidr:
+    Type: String
+    Description: Required - Specifies the CIDR Block of VPC
+    Default: "172.20.0.0/16"
+
+  pVpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: Required - Specifies the ID of an existing VPC in which to launch your container instances.
+
+  pPrivateSubnet01:
+    Type: AWS::EC2::Subnet::Id
+    Description: Required - Specifies which subnets to use for the Container Instances
+
+  pPrivateSubnet02:
+    Type: AWS::EC2::Subnet::Id
+    Description: Required - Specifies which subnets to use for the Container Instances
+
+  pDBclusterName:
+    Type: String
+    Description: Required - Specifies the name of the document db cluster
+    Default: 'srirsmongo'
+  
+  pMasterUser:
+    Type: String
+    Description: Required - Specifies the name of the mongo master user
+    Default: 'srirsmongo'
+
+  pMasterPassword:
+    Type: String
+    Description: Required - Specifies the mongo master user password
+    Default: 'srirsmongo123'
+  
+  pMongoPort:
+    Type: Number
+    Description: Required - Specifies the port mongo will listen to
+    Default: "27017"
+
+Metadata:
+  AWS::CloudFormation::Interface:
+      ParameterGroups:
+        - Label:
+            default: Network Settings
+          Parameters:
+            - pVpcId
+            - pVpcCidr
+            - pPrivateSubnet01
+            - pPrivateSubnet02
+        - Label:
+            default: DocDB Config
+          Parameters:
+            - pDBclusterName
+            - pMasterUser
+            - pMasterPassword
+      ParameterLabels:
+        pVpcCidr:
+          default: VPC CIDR
+        pVpcId:
+          default: VPC ID
+        pPrivateSubnet01:
+          default: VPC Private Subnet AZ
+        pPrivateSubnet02:
+          default: VPC Private Subnet AZ
+        pDBclusterName:
+          default: Name of the docdb cluster
+        pMasterUser:
+          default: Name of the mongo master user
+        pMasterPassword:
+          default: Mongo master user password
+
+
+Resources:
+  mongoCluster:
+    Type: AWS::DocDB::DBCluster
+    DeletionPolicy: Delete
+    Properties:
+      DBClusterIdentifier: !Ref pDBclusterName
+      MasterUsername: !Ref pMasterUser
+      MasterUserPassword: !Ref pMasterPassword
+      BackupRetentionPeriod: 1
+      VpcSecurityGroupIds:
+       - !Ref sgMongo
+      DBSubnetGroupName: !Ref mongoSubnets
+      DeletionProtection: false
+      Port: !Ref pMongoPort
+      Tags:
+      - Key: Name
+        Value: 'srirs-mongo'
+      - Key: controlled-by
+        Value: !Sub cloudformation-${AWS::StackName}
+
+  mongoSubnets:
+    Type: AWS::DocDB::DBSubnetGroup
+    Properties: 
+      DBSubnetGroupDescription: Subnets for SRIRS mongo
+      DBSubnetGroupName: 'srirs-mongo-subnets'
+      SubnetIds: 
+        - !Ref pPrivateSubnet01
+        - !Ref pPrivateSubnet02
+
+
+  sgMongo:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Mongo internal TCP access sg
+      VpcId: !Ref pVpcId
+      SecurityGroupIngress:
+      - IpProtocol: "tcp"
+        FromPort: !Ref pMongoPort
+        ToPort: !Ref pMongoPort
+        CidrIp: !Ref pVpcCidr
+        Description: Internal VPC access
+      Tags:
+      - Key: Name
+        Value: 'srirs-mongo-sg'
+      - Key: controlled-by
+        Value: !Sub cloudformation-${AWS::StackName}
