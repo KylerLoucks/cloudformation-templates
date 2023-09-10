@@ -8,39 +8,39 @@ Parameters:
   pVpcCidr:
     Type: String
     Description: Required - Specifies the CIDR Block of VPC
-    Default: "172.20.0.0/16"
+    Default: 172.20.0.0/16
 
   pVpcId:
     Type: AWS::EC2::VPC::Id
-    Description: Required - Specifies the ID of an existing VPC in which to launch your container instances.
+    Description: Required - Specifies the ID of an existing VPC in which to launch the DB instances.
 
   pPrivateSubnet01:
     Type: AWS::EC2::Subnet::Id
-    Description: Required - Specifies which subnets to use for the Container Instances
+    Description: Required - Specifies which subnets to use for the DB Instances
 
   pPrivateSubnet02:
     Type: AWS::EC2::Subnet::Id
-    Description: Required - Specifies which subnets to use for the Container Instances
+    Description: Required - Specifies which subnets to use for the DB Instances
 
   pDBclusterName:
     Type: String
-    Description: Required - Specifies the name of the document db cluster
-    Default: 'srirsmongo'
+    Description: Required - Specifies the name of the DocumentDB cluster
+    Default: mongodb
   
   pMasterUser:
     Type: String
     Description: Required - Specifies the name of the mongo master user
-    Default: 'srirsmongo'
+    Default: mongoadmin
 
   pMasterPassword:
     Type: String
     Description: Required - Specifies the mongo master user password
-    Default: 'srirsmongo123'
+    Default: mongoadmin123
   
   pMongoPort:
     Type: Number
     Description: Required - Specifies the port mongo will listen to
-    Default: "27017"
+    Default: 27017
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -98,8 +98,8 @@ Resources:
   mongoSubnets:
     Type: AWS::DocDB::DBSubnetGroup
     Properties: 
-      DBSubnetGroupDescription: Subnets for SRIRS mongo
-      DBSubnetGroupName: 'srirs-mongo-subnets'
+      DBSubnetGroupDescription: Subnets for mongodb
+      DBSubnetGroupName: mongodb-subnets
       SubnetIds: 
         - !Ref pPrivateSubnet01
         - !Ref pPrivateSubnet02
@@ -118,6 +118,6 @@ Resources:
         Description: Internal VPC access
       Tags:
       - Key: Name
-        Value: 'srirs-mongo-sg'
+        Value: mongo-sg
       - Key: controlled-by
         Value: !Sub cloudformation-${AWS::StackName}
