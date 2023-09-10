@@ -91,7 +91,7 @@ Resources:
       Port: !Ref pMongoPort
       Tags:
       - Key: Name
-        Value: 'srirs-mongo'
+        Value: 'mongodb'
       - Key: controlled-by
         Value: !Sub cloudformation-${AWS::StackName}
 
