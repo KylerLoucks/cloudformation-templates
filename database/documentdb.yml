@@ -91,9 +91,23 @@ Resources:
       Port: !Ref pMongoPort
       Tags:
       - Key: Name
-        Value: 'mongodb'
+        Value: mongodb
       - Key: controlled-by
         Value: !Sub cloudformation-${AWS::StackName}
+  
+  mongoInstance:
+    Type: AWS::DocDB::DBInstance
+    Properties: 
+      DBClusterIdentifier: !Ref mongoCluster
+      DBInstanceClass: db.r5.large
+      DBInstanceIdentifier: !Sub ${mongoCluster}-instance-0
+      EnablePerformanceInsights: False
+      PreferredMaintenanceWindow: sat:06:54-sat:07:24
+      Tags:
+        - Key: Name
+          Value: !Sub ${mongoCluster}-instance-0
+        - Key: controlled-by
+          Value: !Sub cloudformation-${AWS::StackName}
 
   mongoSubnets:
     Type: AWS::DocDB::DBSubnetGroup
