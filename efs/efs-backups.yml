@@ -1,0 +1,177 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: AWS Backup EFS daily template.
+
+
+Parameters:
+  pCreateNewBackupVault:
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
+  
+  pBackupVaultName:
+    Type: String
+    Default: aws-efs-backup-vault
+  
+  pBackupPlanName:
+    Type: String
+    Default: aws-efs-backup-plan
+    Description: AWS Backup name for BackupPlan
+  
+  pBackupSelectionName:
+    Type: String
+    Default: aws-efs-backup-selection
+    Description: AWS Backup name for BackupSelection
+  
+  pBackupRuleName:
+    Type: String
+    Default: aws-efs-daily-backup
+    Description: >-
+      AWS Backup frequency. Choose to backup once, twice, thrice or four
+      times a day
+  
+  pScheduleExpression:
+    Type: String
+    Default: cron(0 5 ? * * *)
+    Description: Schedule of Backups to be taken in the form of cron expression
+  
+  pMoveToColdStorageAfterDays:
+    Type: Number
+    Default: 31
+    Description: >-
+      Specifies the number of days after creation that a recovery point is moved
+      to cold storage.
+  
+  pDeleteAfterDays:
+    Type: Number
+    Default: 2557
+    Description: Number of days before the backup will be deleted
+  
+  pTagKey:
+    Type: String
+    Default: backup
+    Description: >-
+      Enter the tag KEY of the AWS resource that needs to be backed up by AWS
+      Backup
+  pTagValue:
+    Type: String
+    Default: daily
+    Description: >-
+      Enter the tag VALUE of the AWS resource that needs to be backed up by AWS
+      Backup
+
+Conditions:
+  CondCreateNewVault: !Equals 
+    - !Ref pCreateNewBackupVault
+    - 'true'
+
+Resources:
+  backupPlan:
+    Type: AWS::Backup::BackupPlan
+    Properties:
+      BackupPlan:
+        BackupPlanName: !Ref pBackupPlanName
+        BackupPlanRule:
+          - CompletionWindowMinutes: 10080
+            Lifecycle:
+              DeleteAfterDays: !Ref pDeleteAfterDays
+              MoveToColdStorageAfterDays: !Ref pMoveToColdStorageAfterDays
+            RuleName: !Ref pBackupRuleName
+            ScheduleExpression: !Ref pScheduleExpression
+            StartWindowMinutes: 480
+            TargetBackupVault: !If 
+              - CondCreateNewVault
+              - !Ref backupVault
+              - !Ref pBackupVaultName
+  
+  backupVault:
+    Type: 'AWS::Backup::BackupVault'
+    Condition: CondCreateNewVault
+    Properties:
+      BackupVaultName: !Ref pBackupVaultName
+      EncryptionKeyArn: !GetAtt backupVaultKey.Arn
+      AccessPolicy: |
+        {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {
+                        "AWS": "*"
+                    },
+                    "Action": [
+                        "backup:DeleteBackupVault",
+                        "backup:DeleteBackupVaultAccessPolicy",
+                        "backup:DeleteRecoveryPoint",
+                        "backup:StartCopyJob",
+                        "backup:StartRestoreJob",
+                        "backup:UpdateRecoveryPointLifecycle"
+                    ],
+                    "Resource": "*"
+                }
+            ]
+        }
+  
+  backupVaultKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Encryption key for daily
+      Enabled: true
+      KeyPolicy:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root'
+            Action:
+              - 'kms:*'
+            Resource: '*'
+  
+  backupVaultKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/cmk/backup
+      TargetKeyId: !Ref backupVaultKey
+  
+  backupRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - backup.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup
+  
+  backupSelection:
+    Type: AWS::Backup::BackupSelection
+    Properties:
+      BackupSelection:
+        SelectionName: !Ref pBackupSelectionName
+        IamRoleArn: !GetAtt backupRole.Arn
+        ListOfTags:
+          - ConditionType: STRINGEQUALS
+            ConditionKey: !Ref pTagKey
+            ConditionValue: !Ref pTagValue
+      BackupPlanId: !Ref backupPlan
+
+Outputs:
+  BackupVaultArn:
+    Description: Backup Vault ARN
+    Condition: CondCreateNewVault
+    Value: !GetAtt backupVault.BackupVaultArn
+  BackupPlanArn:
+    Description: BackupPlan Arn
+    Value: !GetAtt backupPlan.BackupPlanArn
+  BackupPlanId:
+    Description: BackupPlan ID
+    Value: !Ref backupPlan
+  BackupPlanVersionId:
+    Description: BackupPlan Version ID
+    Value: !GetAtt backupPlan.VersionId
