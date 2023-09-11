@@ -134,7 +134,7 @@ Resources:
   sgEfs:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allows access to EFS Port
+      GroupDescription: Allows VPC access to EFS
       VpcId: !Ref pVpcId
       SecurityGroupIngress:
       - IpProtocol: tcp
