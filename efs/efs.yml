@@ -1,0 +1,198 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Template has the capability to create an EFS FileSystem across multiple availability zones with mount targets. Encrypted at rest with a KMS key managed outside of this stack.
+
+Parameters:
+
+# Networking
+  pVpcCidr:
+    Type: String
+    Description: Required - Specifies the CIDR Block of VPC
+
+  pVpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: Required - Specifies the ID of an existing VPC in which to launch your container instances.
+
+  pPrivateSubnet01:
+    Type: AWS::EC2::Subnet::Id
+    Description: Required - Specifies which subnets to use for the EFS Instances
+
+  pPrivateSubnet02:
+    Type: AWS::EC2::Subnet::Id
+    Description: Required - Specifies which subnets to use for the EFS Instances
+
+# EFS
+  pEfsName:
+    Type: String
+    Description: Used to name FileSystem and related resources
+  
+  pKmsKeyId:
+    Type: String
+    Description: Must exist outside this stack. Used to encrypt EFS at rest
+  
+  pTrasitionToIaDays:
+    Type: String
+    Description: Infrequently accessed data moved to IA storage tier
+    Default: AFTER_30_DAYS
+    AllowedValues:
+      - AFTER_7_DAYS
+      - AFTER_14_DAYS
+      - AFTER_30_DAYS
+      - AFTER_60_DAYS
+      - AFTER_90_DAYS
+
+  pPerformanceMode:
+    Type: String
+    Description: Performance mode can't be changed after the file system has been created
+    Default: generalPurpose
+    AllowedValues:
+      - generalPurpose
+      - maxIO
+  
+  pThroughputMode:
+    Type: String
+    Description: Can decrease your file system's throughput in Provisioned Throughput mode or change between the throughput modes as long as it?s been more than 24 hours since the last decrease or throughput mode change.
+    Default: bursting
+    AllowedValues:
+      - bursting
+      - provisioned
+
+  pProvisionedThroughput:
+    Type: Number
+    Description: Measured in MiB/s. Required if ThroughputMode is set to provisioned
+    Default: 2
+    MinValue: 1
+    MaxValue: 1024
+
+  # Environment
+  pEnvironmentTag:
+    Type: String
+    Description: Environment type for default resource tagging
+    AllowedValues:
+      - production
+      - staging
+      - sandbox
+      - test
+      - development
+      - qa
+    Default: production
+  
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterLabels:
+      pVpcId:
+        default: VPC ID
+      pVpcCidr:
+        default: VPC CIDR
+      pPrivateSubnet01:
+        default: VPC Private Subnet AZ01
+      pPrivateSubnet02:
+        default: VPC Private Subnet AZ02
+      pEfsName:
+        default: EFS FileSystem Name
+      pKmsKeyId:
+        default: KMS Key ARN
+      pTrasitionToIaDays:
+        default: Days after to transition to Infrequently Accessed
+      pPerformanceMode:
+        default: EFS Performance Mode
+      pThroughputMode:
+        default: EFS Throughput Mode
+      pProvisionedThroughput:
+        default: EFS Provisioned Throughput
+      pEnvironmentTag:
+          default: Environment Tag
+    
+    ParameterGroups:
+      - Label:
+          default: Network Settings
+        Parameters:
+          - pVpcId
+          - pVpcCidr
+          - pPrivateSubnet01
+          - pPrivateSubnet02
+      - Label:
+          default: EFS Settings
+        Parameters:
+          - pEfsName
+          - pKmsKeyId
+          - pTrasitionToIaDays
+          - pPerformanceMode
+          - pThroughputMode
+          - pProvisionedThroughput
+      - Label:
+          default: Tag Settings
+        Parameters:
+          - pEnvironmentTag
+        
+
+Conditions:
+  CondProvisionedThroughput: !Equals [provisioned, !Ref pThroughputMode]
+
+Resources:
+
+  sgEfs:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allows access to EFS Port
+      VpcId: !Ref pVpcId
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 2049
+        ToPort: 2049
+        CidrIp: !Ref pVpcCidr
+      Tags:
+        - Key: Name
+          Value: !Sub ${pEfsName}-SG
+        - Key: environment
+          Value: !Ref pEnvironmentTag
+        - Key: controlled-by
+          Value: !Sub cloudformation-${AWS::StackName}
+
+  efs:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      BackupPolicy:
+        Status: ENABLED
+      Encrypted: true
+      KmsKeyId: !Ref pKmsKeyId
+      LifecyclePolicies:
+        - TransitionToIA: !Ref pTrasitionToIaDays
+      PerformanceMode: !Ref pPerformanceMode
+      ProvisionedThroughputInMibps: !If [CondProvisionedThroughput, !Ref pProvisionedThroughput, !Ref AWS::NoValue ] 
+      ThroughputMode: !Ref pThroughputMode
+      FileSystemTags:
+        - Key: Name
+          Value: !Ref pEfsName
+        - Key: controlled-by
+          Value: !Sub cloudformation-${AWS::StackName}
+        - Key: environment
+          Value: !Ref pEnvironmentTag
+        - Key: efs-backup
+          Value: daily
+
+  efsMount01:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref efs
+      SubnetId: !Ref pPrivateSubnet01
+      SecurityGroups:
+        - !Ref sgEfs
+
+  efsMount02:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref efs
+      SubnetId: !Ref pPrivateSubnet02
+      SecurityGroups:
+        - !Ref sgEfs
+
+Outputs:
+
+  efsEndpoint:
+    Description: EFS Endpoint
+    Value: !Ref efs
+
+  Version:
+    Description: Template Version
+    Value: efs-0.3
