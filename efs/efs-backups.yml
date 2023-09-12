@@ -50,7 +50,7 @@ Parameters:
   
   pTagKey:
     Type: String
-    Default: backup
+    Default: efs-backup
     Description: >-
       Enter the tag KEY of the AWS resource that needs to be backed up by AWS
       Backup
