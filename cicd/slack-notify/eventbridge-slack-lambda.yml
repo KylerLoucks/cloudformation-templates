@@ -79,7 +79,7 @@ Resources:
       SourceArn: 
         !GetAtt eventBridgeRule.Arn
 
-  eventBridge:
+  eventBridgeRule:
     Type: AWS::Events::Rule
     Properties:
       Name: CodePipelineStateChangeRule
