@@ -1,0 +1,45 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.7
+    commands:
+      - echo "Installing requirements"
+      - pip install --upgrade --force-reinstall boto3 awscli # Upgrade boto3 and awscli
+      - IMAGE_TAG=${CODEBUILD_RESOLVED_SOURCE_VERSION:-latest}
+
+  pre_build:
+    commands:
+      - echo List source files
+      - ls -ltra
+      - echo Logging in to Amazon ECR...
+      - $(aws ecr get-login --region $AWS_DEFAULT_REGION --no-include-email)
+
+  build:
+    commands:
+      - echo Build started on `date`
+      - echo Building the Docker image from mock_model/container/Dockerfile...
+
+      # Using ARG to override the base image to avoid dockerhub rate limit error.
+      - docker build --build-arg BASE_IMAGE_SOURCE=$BASE_IMAGE_REPO --build-arg BASE_IMAGE_TAG=$BASE_IMAGE_TAG -t $ECR_REPOSITORY_URI:$IMAGE_TAG mock_model/container/
+
+  post_build:
+    commands:
+      - echo Build completed on `date`
+      - echo Pushing the Docker image...
+      - docker push $ECR_REPOSITORY_URI:$IMAGE_TAG
+      - echo Successfully pushed the $ECR_REPOSITORY_URI:$IMAGE_TAG Docker Image!
+
+    #  Dev
+      - echo Package dev deployment
+      - aws cloudformation package --template-file template.yml --s3-bucket $CFN_ARTIFACT_BUCKET --output-template-file dev-model.yml
+      - echo Done
+    # Prod 
+      - echo Package prod deployment
+      - aws cloudformation package --template-file template.yml --s3-bucket $CFN_ARTIFACT_BUCKET --output-template-file prod-model.yml
+      - echo Done
+artifacts:
+  files:
+    - "*.yml"
+  discard-paths: yes

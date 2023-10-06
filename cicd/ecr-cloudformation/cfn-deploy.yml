@@ -6,7 +6,6 @@ Metadata:
           default: Required Parameters
         Parameters:
           - ModelName
-          - NotebookInstanceType
       - Label:
           default: Optional GitHub Parameters
         Parameters:
@@ -14,6 +13,12 @@ Metadata:
           - GitHubBranch
           - GitHubUser
           - pCodeStarConnection
+      - Label:
+          default: Base Docker Image
+        Parameters:
+          - pBaseEcrRepo
+          - pBaseImageTag
+        
     ParameterLabels:
       ModelName:
         default: Model Name
@@ -23,8 +28,12 @@ Metadata:
         default: GitHub Branch
       GitHubUser:
         default: GitHub Username
-      GitHubToken:
-        default: GitHub Access Token
+      pBaseEcrRepo:
+        default: Base ECR Repo
+      pBaseImageTag:
+        default: Base Image Tag
+      pCodeStarConnection:
+        default: CodeStar Connection
 
 Parameters:
   ModelName:
