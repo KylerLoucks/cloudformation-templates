@@ -96,6 +96,7 @@ Resources:
             - CANCELED
           type:
             category:
+              - Source
               - Approval
               - Deploy
               - Build
