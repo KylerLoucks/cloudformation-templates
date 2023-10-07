@@ -1,0 +1,42 @@
+{
+    "version": "0",
+    "id": "a5afd8c1-4b43-9117-ceaa-9bc4825e0163",
+    "detail-type": "CodePipeline Action Execution State Change",
+    "source": "aws.codepipeline",
+    "account": "570351108046",
+    "time": "2023-10-07T20:19:16Z",
+    "region": "us-west-2",
+    "resources": [
+        "arn:aws:codepipeline:us-west-2:570351108046:s3-pipeline-test"
+    ],
+    "detail": {
+        "pipeline": "s3-pipeline-test",
+        "execution-id": "ba0033e3-ceba-4430-b18a-6ac5858a5624",
+        "stage": "Source",
+        "execution-result": {
+            "external-execution-url": "https://us-west-2.console.aws.amazon.com/codesuite/settings/connections/redirect?connectionArn=arn:aws:codestar-connections:us-west-2:570351108046:connection/49ce067e-2496-4d68-89e6-350dd9c27c91&referenceType=COMMIT&FullRepositoryId=cloud303-kloucks/documentdb-example&Commit=ddbe7ef257512f9455e9b74a5ebe8ef831e615b7",
+            "external-execution-summary": "{\"ProviderType\":\"GitHub\",\"CommitMessage\":\"initial commit\"}",
+            "external-execution-id": "ddbe7ef257512f9455e9b74a5ebe8ef831e615b7"
+        },
+        "output-artifacts": [
+            {
+                "name": "SourceOutput",
+                "s3location": {
+                    "bucket": "s3-pipeline-test-artifacts-us-west-2",
+                    "key": "s3-pipeline-test/SourceOutp/hRSU4a2"
+                }
+            }
+        ],
+        "action": "SourceAction",
+        "state": "SUCCEEDED",
+        "region": "us-west-2",
+        "type": {
+            "owner": "AWS",
+            "provider": "CodeStarSourceConnection",
+            "category": "Source",
+            "version": "1"
+        },
+        "version": 1,
+        "pipeline-execution-attempt": 1
+    }
+}

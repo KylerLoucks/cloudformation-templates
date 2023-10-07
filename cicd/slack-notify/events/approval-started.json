@@ -1,0 +1,28 @@
+{
+    "version": "0",
+    "id": "b8800dbd-c07b-cd15-6829-a822eac47d8b",
+    "detail-type": "CodePipeline Action Execution State Change",
+    "source": "aws.codepipeline",
+    "account": "570351108046",
+    "time": "2023-10-07T20:22:29Z",
+    "region": "us-west-2",
+    "resources": [
+        "arn:aws:codepipeline:us-west-2:570351108046:s3-pipeline-test"
+    ],
+    "detail": {
+        "pipeline": "s3-pipeline-test",
+        "execution-id": "e49953cb-30d7-4cb4-863e-8946e827dfea",
+        "stage": "DEV-Approval-Stage",
+        "action": "ManualApproval",
+        "state": "STARTED",
+        "region": "us-west-2",
+        "type": {
+            "owner": "AWS",
+            "provider": "Manual",
+            "category": "Approval",
+            "version": "1"
+        },
+        "version": 1,
+        "pipeline-execution-attempt": 1
+    }
+}

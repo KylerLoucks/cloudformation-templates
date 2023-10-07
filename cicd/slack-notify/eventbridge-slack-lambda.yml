@@ -42,26 +42,27 @@ Resources:
 
           webhook_url = ""
           def handler(event):
-              message = {
-                  "channel": "<#notification-slack-channel>",
-                  "username": "<slack-bot-name>",
-                  "icon_emoji": ":uh-oh-sooj:",
-                  "attachments": [
-                      {
-                          "fallback": "CICD: <https://google.com/|open link here>", # Hyperlink
-                          "pretext": "CICD: <https://google.com/|open link here>",
-                          "color": "#34bb13",
-                          "fields": [
-                              {
-                                  "title": "Server",
-                                  "value": "server is starting!!"
-                              }
-                          ]
-                      }
-                  ]
-              }
+              print(json.dumps(event))
+              # message = {
+              #     "channel": "<#notification-slack-channel>",
+              #     "username": "<slack-bot-name>",
+              #     "icon_emoji": ":uh-oh-sooj:",
+              #     "attachments": [
+              #         {
+              #             "fallback": "CICD: <https://google.com/|open link here>", # Hyperlink
+              #             "pretext": "CICD: <https://google.com/|open link here>",
+              #             "color": "#34bb13",
+              #             "fields": [
+              #                 {
+              #                     "title": "Server",
+              #                     "value": "server is starting!!"
+              #                 }
+              #             ]
+              #         }
+              #     ]
+              # }
 
-              response = requests.post(url=webhook_url, data=json.dumps(message))
+              # response = requests.post(url=webhook_url, data=json.dumps(message))
 
   lambdaLogGroup:
     Type: AWS::Logs::LogGroup
@@ -101,7 +102,7 @@ Resources:
               - Deploy
               - Build
         resources:
-          - !Sub "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:<PIPELINE_NAME>"
+          - !Sub "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:s3-pipeline-test"
       Targets:
         - Arn: !GetAtt lambdaFunction.Arn
           Id: targetFunction

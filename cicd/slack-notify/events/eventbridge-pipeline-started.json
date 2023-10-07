@@ -1,0 +1,23 @@
+{
+    "version": "0",
+    "id": "603067e2-10f2-ad88-3b58-e74b2b9d2a2e",
+    "detail-type": "CodePipeline Pipeline Execution State Change",
+    "source": "aws.codepipeline",
+    "account": "570351108046",
+    "time": "2023-10-07T20:10:51Z",
+    "region": "us-west-2",
+    "resources": [
+        "arn:aws:codepipeline:us-west-2:570351108046:s3-pipeline-test"
+    ],
+    "detail": {
+        "pipeline": "s3-pipeline-test",
+        "execution-id": "b8493c46-0064-4191-aa36-af8dabd4bf69",
+        "execution-trigger": {
+            "trigger-type": "StartPipelineExecution",
+            "trigger-detail": "arn:aws:sts::570351108046:assumed-role/cloud303-rnd/kloucks"
+        },
+        "state": "STARTED",
+        "version": 1,
+        "pipeline-execution-attempt": 1
+    }
+}

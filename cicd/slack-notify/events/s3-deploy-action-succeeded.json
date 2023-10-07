@@ -1,0 +1,32 @@
+{
+    "version": "0",
+    "id": "71e1cb72-db60-81af-9521-8815a778d150",
+    "detail-type": "CodePipeline Action Execution State Change",
+    "source": "aws.codepipeline",
+    "account": "570351108046",
+    "time": "2023-10-07T20:23:36Z",
+    "region": "us-west-2",
+    "resources": [
+        "arn:aws:codepipeline:us-west-2:570351108046:s3-pipeline-test"
+    ],
+    "detail": {
+        "pipeline": "s3-pipeline-test",
+        "execution-id": "e49953cb-30d7-4cb4-863e-8946e827dfea",
+        "stage": "DEV-Deploy",
+        "execution-result": {
+            "external-execution-summary": "Deployment Succeeded",
+            "external-execution-id": "kloucks-test-deploy"
+        },
+        "action": "S3",
+        "state": "SUCCEEDED",
+        "region": "us-west-2",
+        "type": {
+            "owner": "AWS",
+            "provider": "S3",
+            "category": "Deploy",
+            "version": "1"
+        },
+        "version": 1,
+        "pipeline-execution-attempt": 1
+    }
+}

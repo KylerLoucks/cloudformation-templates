@@ -1,0 +1,193 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Creates a CodePipeline pipeline that deploys all github repo changes to an S3 bucket. Uses GitHub version 2 source action.
+
+Parameters:
+  pBucketName:
+    Type: String
+    Description: Name of the S3 bucket to deploy new changes to.
+    ConstraintDescription: "Please specify the Bucket name."
+
+  pRepoName:
+    Type: String
+    Description: Name of the repository.
+    ConstraintDescription: "Please specify the Repository name."
+
+  pBranchName:
+    Type: String
+    Description: Name of the branch that commits will trigger the pipeline.
+    Default: master
+    ConstraintDescription: "Please specify the Branch name."
+
+  pCodeStarConnection:
+    Type: String
+    Description: ARN of the CodeStar connection
+    ConstraintDescription: "Please specify the CodeStar connection ARN."
+    
+  pRepoOwner:
+    Type: String
+    Description: Repository Owner Name. If the repo owner is an organization, enter organization name.
+    ConstraintDescription: "Please specify the Repository Owner name"
+
+  pStageNamePrefix:
+    Type: String
+    Description: Prefix to give for manual approval stage names
+    AllowedValues:
+      - PROD
+      - DEV
+    ConstraintDescription: "Please specify an environment tag"
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterLabels:
+      pBucketName:
+        default: Bucket Name
+      pRepoOwner:
+        default: Repository Owner
+      pRepoName:
+        default: Repository Name
+      pCodeStarConnection:
+        default: CodeStar connection ARN
+      pBranchName:
+        default: Branch Name
+      pStageNamePrefix:
+        default: Stage Name Prefix
+
+    ParameterGroups:
+      - Label:
+          default: CodePipeline Source Provider Settings
+        Parameters:
+          - pCodeStarConnection
+          - pRepoOwner
+          - pRepoName
+          - pBranchName
+      - Label:
+          default: CodePipeline Deployment Provider Settings
+        Parameters:
+          - pBucketName
+
+Resources:
+
+  # CodePipeline IAM Role
+  codePipelineServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub codepipeline-role-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codepipeline.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: s3Artifacts
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource: 
+                  - !Sub "arn:aws:s3:::${s3ArtifactBucketCodePipeline}"
+                  - !Sub "arn:aws:s3:::${s3ArtifactBucketCodePipeline}/*"
+        - PolicyName: s3DeploymentBucket
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource: 
+                  - !Sub "arn:aws:s3:::${pBucketName}"
+                  - !Sub "arn:aws:s3:::${pBucketName}/*"
+        - PolicyName: codeStarConnection
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codestar-connections:UseConnection
+                Resource: "*"
+
+  codePipeline: 
+    Type: AWS::CodePipeline::Pipeline 
+    Properties: 
+      Name: !Sub ${AWS::StackName} # c303-prod-faststak-cloudformation-cicd
+      RoleArn: !GetAtt codePipelineServiceRole.Arn
+      Stages: 
+        - Name: Source
+          Actions: 
+            - Name: SourceAction
+              # Variables to be referenced in other Actions. Ex: #{SourceVariables.CommitId} https://docs.aws.amazon.com/codepipeline/latest/userguide/reference-variables.html
+              Namespace: SourceVariables
+              ActionTypeId: 
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: 1
+              Configuration:
+
+                # CodeStar connection ARN
+                ConnectionArn: !Ref pCodeStarConnection
+                
+                # Owner and Name of the repository ex: some-user/my-repo
+                FullRepositoryId: !Sub ${pRepoOwner}/${pRepoName}
+                BranchName: !Ref pBranchName
+                OutputArtifactFormat: CODE_ZIP
+
+                # trigger the pipeline on every new commit
+                DetectChanges: true
+              OutputArtifacts:
+                - Name: SourceOutput 
+        - Name: !Sub ${pStageNamePrefix}-Approval-Stage
+          Actions:
+            - Name: ManualApproval
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: 1
+              Configuration:
+                CustomData: "Please approve this change. Commit message: #{SourceVariables.CommitMessage}"
+                ExternalEntityLink: !Sub "https://github.com/${pRepoOwner}/${pRepoName}/commit/#{SourceVariables.CommitId}"
+        - Name: !Sub ${pStageNamePrefix}-Deploy
+          Actions:
+            - Name: S3
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: S3
+                Version: 1
+              Configuration:
+                BucketName: !Ref pBucketName
+                Extract: true
+              InputArtifacts:
+                - Name: SourceOutput
+      ArtifactStore: 
+        Type: S3 
+        Location: !Ref s3ArtifactBucketCodePipeline
+
+  s3ArtifactBucketCodePipeline:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${AWS::StackName}-artifacts-${AWS::Region}
+
+Outputs:
+
+  pipeline:
+    Description: CodePipeline CI/CD pipeline Name
+    Value: !Ref codePipeline
+
+  pipelineServiceRole:
+    Description: CodePipeline IAM Service Role
+    Value: !GetAtt codePipelineServiceRole.Arn
+
+  Version:
+    Description: Template Version
+    Value: pipeline-deploy-s3-0.1

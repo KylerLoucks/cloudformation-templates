@@ -1,0 +1,33 @@
+{
+    "version": "0",
+    "id": "a178f587-cf8c-9d15-7b40-bf805b713ace",
+    "detail-type": "CodePipeline Action Execution State Change",
+    "source": "aws.codepipeline",
+    "account": "570351108046",
+    "time": "2023-10-07T20:21:06Z",
+    "region": "us-west-2",
+    "resources": [
+        "arn:aws:codepipeline:us-west-2:570351108046:s3-pipeline-test"
+    ],
+    "detail": {
+        "pipeline": "s3-pipeline-test",
+        "execution-id": "ba0033e3-ceba-4430-b18a-6ac5858a5624",
+        "stage": "DEV-Approval-Stage",
+        "execution-result": {
+            "external-execution-summary": "Rejected by arn:aws:sts::570351108046:assumed-role/cloud303-rnd/kloucks",
+            "external-execution-id": "4514ab73-d48d-4aed-a1be-90c11326db87",
+            "error-code": "JobFailed"
+        },
+        "action": "ManualApproval",
+        "state": "FAILED",
+        "region": "us-west-2",
+        "type": {
+            "owner": "AWS",
+            "provider": "Manual",
+            "category": "Approval",
+            "version": "1"
+        },
+        "version": 1,
+        "pipeline-execution-attempt": 1
+    }
+}

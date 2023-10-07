@@ -1,0 +1,37 @@
+{
+    "version": "0",
+    "id": "905ff285-eff8-32bc-4ab1-add8812af9ed",
+    "detail-type": "CodePipeline Action Execution State Change",
+    "source": "aws.codepipeline",
+    "account": "570351108046",
+    "time": "2023-10-07T20:23:35Z",
+    "region": "us-west-2",
+    "resources": [
+        "arn:aws:codepipeline:us-west-2:570351108046:s3-pipeline-test"
+    ],
+    "detail": {
+        "pipeline": "s3-pipeline-test",
+        "execution-id": "e49953cb-30d7-4cb4-863e-8946e827dfea",
+        "stage": "DEV-Deploy",
+        "action": "S3",
+        "input-artifacts": [
+            {
+                "name": "SourceOutput",
+                "s3location": {
+                    "bucket": "s3-pipeline-test-artifacts-us-west-2",
+                    "key": "s3-pipeline-test/SourceOutp/OzXqQN2"
+                }
+            }
+        ],
+        "state": "STARTED",
+        "region": "us-west-2",
+        "type": {
+            "owner": "AWS",
+            "provider": "S3",
+            "category": "Deploy",
+            "version": "1"
+        },
+        "version": 1,
+        "pipeline-execution-attempt": 1
+    }
+}
