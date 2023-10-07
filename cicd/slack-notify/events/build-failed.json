@@ -1,0 +1,32 @@
+{
+    "version": "0",
+    "id": "94693d03-49d8-65ec-9c1f-458c16c7e16d",
+    "detail-type": "CodePipeline Action Execution State Change",
+    "source": "aws.codepipeline",
+    "account": "570351108046",
+    "time": "2023-10-07T20:53:25Z",
+    "region": "us-west-2",
+    "resources": [
+        "arn:aws:codepipeline:us-west-2:570351108046:s3-pipeline-test"
+    ],
+    "detail": {
+        "pipeline": "s3-pipeline-test",
+        "execution-id": "10adacb7-9df1-4b94-8f63-9ed5b84ffc84",
+        "stage": "Build",
+        "execution-result": {
+            "external-execution-summary": "Error calling startBuild: User: arn:aws:sts::570351108046:assumed-role/codepipeline-role-us-west-2/1696712005273 is not authorized to perform: codebuild:StartBuild on resource: arn:aws:codebuild:us-west-2:570351108046:project/test-build because no identity-based policy allows the codebuild:StartBuild action (Service: AWSCodeBuild; Status Code: 400; Error Code: AccessDeniedException; Request ID: 802c7fd6-d594-40c8-a220-c2d2211e093d; Proxy: null)",
+            "error-code": "JobFailed"
+        },
+        "action": "CodeBuild",
+        "state": "FAILED",
+        "region": "us-west-2",
+        "type": {
+            "owner": "AWS",
+            "provider": "CodeBuild",
+            "category": "Build",
+            "version": "1"
+        },
+        "version": 2,
+        "pipeline-execution-attempt": 1
+    }
+}

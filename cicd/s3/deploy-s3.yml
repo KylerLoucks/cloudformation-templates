@@ -94,6 +94,18 @@ Resources:
                 Resource: 
                   - !Sub "arn:aws:s3:::${s3ArtifactBucketCodePipeline}"
                   - !Sub "arn:aws:s3:::${s3ArtifactBucketCodePipeline}/*"
+        # - PolicyName: codeBuildStart
+        #   PolicyDocument:
+        #     Version: 2012-10-17
+        #     Statement:
+        #       - Effect: Allow
+        #         Action:
+        #           - codebuild:BatchGetBuilds
+        #           - codebuild:StartBuild
+        #           - codebuild:BatchGetBuildBatches
+        #           - codebuild:StartBuildBatch
+        #         Resource: 
+        #           - !GetAtt codeBuildProject.Arn
         - PolicyName: s3DeploymentBucket
           PolicyDocument:
             Version: 2012-10-17
@@ -168,7 +180,7 @@ Resources:
                 BucketName: !Ref pBucketName
                 Extract: true
               InputArtifacts:
-                - Name: SourceOutput
+                - Name: BuildArtifact
       ArtifactStore: 
         Type: S3 
         Location: !Ref s3ArtifactBucketCodePipeline
