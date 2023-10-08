@@ -180,7 +180,7 @@ Resources:
                 BucketName: !Ref pBucketName
                 Extract: true
               InputArtifacts:
-                - Name: BuildArtifact
+                - Name: SourceOutput
       ArtifactStore: 
         Type: S3 
         Location: !Ref s3ArtifactBucketCodePipeline

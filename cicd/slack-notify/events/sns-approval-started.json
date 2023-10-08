@@ -1,0 +1,22 @@
+{
+    "Records": [
+        {
+            "EventSource": "aws:sns",
+            "EventVersion": "1.0",
+            "EventSubscriptionArn": "arn:aws:sns:us-west-2:570351108046:codestar-notifications-sns-test:672cbb34-53b7-4548-807d-216522956164",
+            "Sns": {
+                "Type": "Notification",
+                "MessageId": "fb10e642-47d3-50f6-98f8-bbde006d3353",
+                "TopicArn": "arn:aws:sns:us-west-2:570351108046:codestar-notifications-sns-test",
+                "Subject": null,
+                "Message": "{\"account\":\"570351108046\",\"detailType\":\"CodePipeline Action Execution State Change\",\"region\":\"us-west-2\",\"source\":\"aws.codepipeline\",\"time\":\"2023-10-08T06:00:18Z\",\"notificationRuleArn\":\"arn:aws:codestar-notifications:us-west-2:570351108046:notificationrule/aaca5fe26edc61ea5a60588b4924c4d0c84d29ac\",\"detail\":{\"pipeline\":\"pipeline-test\",\"execution-id\":\"c72bb66d-460f-497e-9446-33670699feea\",\"stage\":\"PROD-Approval-Stage\",\"action\":\"ManualApproval\",\"state\":\"STARTED\",\"region\":\"us-west-2\",\"type\":{\"owner\":\"AWS\",\"provider\":\"Manual\",\"category\":\"Approval\",\"version\":\"1\"},\"version\":1.0,\"pipeline-execution-attempt\":1.0},\"resources\":[\"arn:aws:codepipeline:us-west-2:570351108046:pipeline-test\"],\"additionalAttributes\":{\"externalEntityLink\":\"https://github.com/cloud303-kloucks/documentdb-example/commit/ddbe7ef257512f9455e9b74a5ebe8ef831e615b7\",\"customData\":\"Please approve this change. Commit message: initial commit\"}}",
+                "Timestamp": "2023-10-08T06:00:30.868Z",
+                "SignatureVersion": "1",
+                "Signature": "Kr2JeEzC6C9F5L0o0qEec17Tbo1i3UiVPsD2fYJ+zy4rMfiu7WmkYsEsm8iY2mYgfUSWyEvmtqiiVJH/eHFbFR5Q2aD1onyktvTBvAH5Fp0BZGQuwxS115brM7MMqzLRbt8kzGTpUs1a4DDRVDPmyYawibdrIQw75hanRrH7x4bj8isi0EmDOwB8gbu0bjDXq0ahCkwSfc16UjDO6RyB3z9jTNoLbm+4lDbVfYz8HtX1I09Xlxkpu/DiZwSqxR1u6mXrx3hUH5m3XQYdJ2T+VnvICX+9s4ahrrHZcRI34+0Vzq01iFXUf9IAmhKsbYokVfEq8/tr+jMcuyCPGlAslg==",
+                "SigningCertUrl": "https://sns.us-west-2.amazonaws.com/SimpleNotificationService-01d088a6f77103d0fe307c0069e40ed6.pem",
+                "UnsubscribeUrl": "https://sns.us-west-2.amazonaws.com/?Action=Unsubscribe&SubscriptionArn=arn:aws:sns:us-west-2:570351108046:codestar-notifications-sns-test:672cbb34-53b7-4548-807d-216522956164",
+                "MessageAttributes": {}
+            }
+        }
+    ]
+}

@@ -11,7 +11,7 @@
     ],
     "detail": {
         "pipeline": "s3-pipeline-test",
-        "execution-id": "ba0033e3-ceba-4430-b18a-6ac5858a5624",
+        "execution-id": "097432b6-3b5e-4e53-ae25-456cd1024587",
         "stage": "DEV-Approval-Stage",
         "execution-result": {
             "external-execution-summary": "Rejected by arn:aws:sts::570351108046:assumed-role/cloud303-rnd/kloucks",

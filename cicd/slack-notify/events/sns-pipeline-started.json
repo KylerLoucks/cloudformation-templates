@@ -1,0 +1,22 @@
+{
+    "Records": [
+        {
+            "EventSource": "aws:sns",
+            "EventVersion": "1.0",
+            "EventSubscriptionArn": "arn:aws:sns:us-west-2:570351108046:codestar-notifications-sns-test:672cbb34-53b7-4548-807d-216522956164",
+            "Sns": {
+                "Type": "Notification",
+                "MessageId": "dea881d1-71bf-5ccf-bcb9-dc4d3605cf6a",
+                "TopicArn": "arn:aws:sns:us-west-2:570351108046:codestar-notifications-sns-test",
+                "Subject": null,
+                "Message": "{\"account\":\"570351108046\",\"detailType\":\"CodePipeline Pipeline Execution State Change\",\"region\":\"us-west-2\",\"source\":\"aws.codepipeline\",\"time\":\"2023-10-08T06:00:13Z\",\"notificationRuleArn\":\"arn:aws:codestar-notifications:us-west-2:570351108046:notificationrule/aaca5fe26edc61ea5a60588b4924c4d0c84d29ac\",\"detail\":{\"pipeline\":\"pipeline-test\",\"execution-id\":\"c72bb66d-460f-497e-9446-33670699feea\",\"execution-trigger\":{\"trigger-type\":\"StartPipelineExecution\",\"trigger-detail\":\"arn:aws:sts::570351108046:assumed-role/cloud303-rnd/kloucks\"},\"state\":\"STARTED\",\"version\":1.0,\"pipeline-execution-attempt\":1.0},\"resources\":[\"arn:aws:codepipeline:us-west-2:570351108046:pipeline-test\"],\"additionalAttributes\":{}}",
+                "Timestamp": "2023-10-08T06:00:26.256Z",
+                "SignatureVersion": "1",
+                "Signature": "RQ9TCt3MwDGnd37aX+r0MD1afsR5xpCJCvaYoHIKBbBYsMFR0iH8FYyX+2tTjBSSLAOhTtecTLETBYjR+D7SeemtXN1tijyvsTz7I1QjR2kllxdXLv9/dLnFvwp4vjmHkA/SjtUp/ah+2bDpb1DhcWVTflZQt0hfdcpSA8Xe9e3JrTpCKP2IdRHmX+6NEuAhtSZMk1UUBV5DpBmHARbiIwq8yQycIqSRGrvfGRDPljPcuw7PW6jEtRgjleITL5cYDBpLbszFpkClUs2Uks0XqV/fvUAqBCf9gi6ZOqlXv+SzgSrF0GQWOk/WuPgzL7Mgmq8pI26nbsyZ6MoYimBDZQ==",
+                "SigningCertUrl": "https://sns.us-west-2.amazonaws.com/SimpleNotificationService-01d088a6f77103d0fe307c0069e40ed6.pem",
+                "UnsubscribeUrl": "https://sns.us-west-2.amazonaws.com/?Action=Unsubscribe&SubscriptionArn=arn:aws:sns:us-west-2:570351108046:codestar-notifications-sns-test:672cbb34-53b7-4548-807d-216522956164",
+                "MessageAttributes": {}
+            }
+        }
+    ]
+}

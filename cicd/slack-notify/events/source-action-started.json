@@ -1,25 +1,25 @@
 {
     "version": "0",
-    "id": "b8800dbd-c07b-cd15-6829-a822eac47d8b",
+    "id": "3bf04565-f8cf-a80f-7824-3b7144a9457f",
     "detail-type": "CodePipeline Action Execution State Change",
     "source": "aws.codepipeline",
     "account": "570351108046",
-    "time": "2023-10-07T20:22:29Z",
+    "time": "2023-10-08T05:38:39Z",
     "region": "us-west-2",
     "resources": [
-        "arn:aws:codepipeline:us-west-2:570351108046:s3-pipeline-test"
+        "arn:aws:codepipeline:us-west-2:570351108046:pipeline-test"
     ],
     "detail": {
-        "pipeline": "s3-pipeline-test",
+        "pipeline": "pipeline-test",
         "execution-id": "097432b6-3b5e-4e53-ae25-456cd1024587",
-        "stage": "DEV-Approval-Stage",
-        "action": "ManualApproval",
+        "stage": "Source",
+        "action": "SourceAction",
         "state": "STARTED",
         "region": "us-west-2",
         "type": {
             "owner": "AWS",
-            "provider": "Manual",
-            "category": "Approval",
+            "provider": "CodeStarSourceConnection",
+            "category": "Source",
             "version": "1"
         },
         "version": 1,

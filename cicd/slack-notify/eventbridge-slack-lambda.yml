@@ -37,12 +37,11 @@ Resources:
       Timeout: 240
       Code:
         ZipFile: !Sub |
-          import requests
           import json
 
           webhook_url = ""
           def handler(event):
-              print(json.dumps(event))
+              print(json.dumps(event, context))
               # message = {
               #     "channel": "<#notification-slack-channel>",
               #     "username": "<slack-bot-name>",
@@ -88,7 +87,7 @@ Resources:
         source:
           - aws.codepipeline
         detail-type:
-          - AWS CodePipeline Pipeline Execution State Change
+          - CodePipeline Pipeline Execution State Change
           - CodePipeline Action Execution State Change
         detail:
           state:

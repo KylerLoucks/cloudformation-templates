@@ -11,7 +11,7 @@
     ],
     "detail": {
         "pipeline": "s3-pipeline-test",
-        "execution-id": "b8493c46-0064-4191-aa36-af8dabd4bf69",
+        "execution-id": "097432b6-3b5e-4e53-ae25-456cd1024587",
         "execution-trigger": {
             "trigger-type": "StartPipelineExecution",
             "trigger-detail": "arn:aws:sts::570351108046:assumed-role/cloud303-rnd/kloucks"

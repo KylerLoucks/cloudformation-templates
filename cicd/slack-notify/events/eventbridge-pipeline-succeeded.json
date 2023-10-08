@@ -11,7 +11,7 @@
     ],
     "detail": {
         "pipeline": "s3-pipeline-test",
-        "execution-id": "54c536ca-70c9-4a71-b24d-d7dd8370c8d1",
+        "execution-id": "097432b6-3b5e-4e53-ae25-456cd1024587",
         "state": "SUCCEEDED",
         "version": 1,
         "pipeline-execution-attempt": 1
