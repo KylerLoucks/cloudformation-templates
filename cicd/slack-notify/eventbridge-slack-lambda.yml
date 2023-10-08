@@ -89,6 +89,7 @@ Resources:
           - aws.codepipeline
         detail-type:
           - AWS CodePipeline Pipeline Execution State Change
+          - CodePipeline Action Execution State Change
         detail:
           state:
             - STARTED
@@ -102,7 +103,7 @@ Resources:
               - Deploy
               - Build
         resources:
-          - !Sub "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:s3-pipeline-test"
+          - !Sub "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:PIPELINE_NAME"
       Targets:
         - Arn: !GetAtt lambdaFunction.Arn
           Id: targetFunction

@@ -1,0 +1,19 @@
+{
+    "version": "0",
+    "id": "62f38bdb-95dd-b528-0601-b6873fb902bb",
+    "detail-type": "CodePipeline Pipeline Execution State Change",
+    "source": "aws.codepipeline",
+    "account": "570351108046",
+    "time": "2023-10-07T20:16:09Z",
+    "region": "us-west-2",
+    "resources": [
+        "arn:aws:codepipeline:us-west-2:570351108046:s3-pipeline-test"
+    ],
+    "detail": {
+        "pipeline": "s3-pipeline-test",
+        "execution-id": "54c536ca-70c9-4a71-b24d-d7dd8370c8d1",
+        "state": "SUCCEEDED",
+        "version": 1,
+        "pipeline-execution-attempt": 1
+    }
+}
