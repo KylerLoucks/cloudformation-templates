@@ -1,0 +1,22 @@
+{
+    "Records": [
+        {
+            "EventSource": "aws:sns",
+            "EventVersion": "1.0",
+            "EventSubscriptionArn": "arn:aws:sns:us-west-2:570351108046:codestar-notifications-sns-test:672cbb34-53b7-4548-807d-216522956164",
+            "Sns": {
+                "Type": "Notification",
+                "MessageId": "6fcbd5b7-86e9-5881-b50b-882bcf795048",
+                "TopicArn": "arn:aws:sns:us-west-2:570351108046:codestar-notifications-sns-test",
+                "Subject": null,
+                "Message": "{\"account\":\"570351108046\",\"detailType\":\"CodePipeline Action Execution State Change\",\"region\":\"us-west-2\",\"source\":\"aws.codepipeline\",\"time\":\"2023-10-08T06:08:10Z\",\"notificationRuleArn\":\"arn:aws:codestar-notifications:us-west-2:570351108046:notificationrule/aaca5fe26edc61ea5a60588b4924c4d0c84d29ac\",\"detail\":{\"pipeline\":\"pipeline-test\",\"execution-id\":\"deaf9453-d2a4-46ad-bc74-73493190bbea\",\"stage\":\"PROD-Deploy\",\"execution-result\":{\"external-execution-summary\":\"Deployment Succeeded\",\"external-execution-id\":\"kloucks-test\"},\"action\":\"S3\",\"state\":\"SUCCEEDED\",\"region\":\"us-west-2\",\"type\":{\"owner\":\"AWS\",\"provider\":\"S3\",\"category\":\"Deploy\",\"version\":\"1\"},\"version\":1.0,\"pipeline-execution-attempt\":1.0},\"resources\":[\"arn:aws:codepipeline:us-west-2:570351108046:pipeline-test\"],\"additionalAttributes\":{}}",
+                "Timestamp": "2023-10-08T06:08:16.828Z",
+                "SignatureVersion": "1",
+                "Signature": "e2QLKEAEa/vR5y8DetVmmnr5sAXpTtflg4b/AwusJMQedSW6WnVXMyfKs9cB2YoH/qQSMmqi+LKJaaVr/gM/QwDUH3BkpeccvAU2Ig7IrGOOE/RVBHrBtO47enA23OsXXTrNqEqA2z3rcHpslJsmrl5DSHgiK1NFvbrP5Up3fcv347V1Lain7zRbzUmuooQFk3WNmfnWfiJppgbIhhndO6Glo4TStXlmrSGSHN847F1iso/PFqUkH1EyV6r5ut5FlCqJKnHsZXuCrlhzAFV8DXQf8tZABkNwiJK369JY/Nczxuk4REfU1Ll+0PB0QMS9VmrhrFfpBAOoIXZI20bBxA==",
+                "SigningCertUrl": "https://sns.us-west-2.amazonaws.com/SimpleNotificationService-01d088a6f77103d0fe307c0069e40ed6.pem",
+                "UnsubscribeUrl": "https://sns.us-west-2.amazonaws.com/?Action=Unsubscribe&SubscriptionArn=arn:aws:sns:us-west-2:570351108046:codestar-notifications-sns-test:672cbb34-53b7-4548-807d-216522956164",
+                "MessageAttributes": {}
+            }
+        }
+    ]
+}
