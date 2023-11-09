@@ -1,0 +1,372 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description:  OpenVPN server running on Ubuntu 22.04/Graviton Arm64 processors.
+
+Parameters:
+  pLatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Description: Mapping to retrieve the latest Ubuntu 20.04 AMI. Do not change this value.
+    Default: /aws/service/canonical/ubuntu/server/22.04/stable/current/arm64/hvm/ebs-gp2/ami-id
+
+  pVpcId:
+    Type: AWS::EC2::VPC::Id
+
+  pVpcCidr:
+    Type: String
+    Description: VPC CIDR for Security Group Ingress
+
+  pEc2InstanceType:
+    Type: String
+    Description: Instance Family and size
+    Default: t4g.micro
+    AllowedValues:
+      - t4g.micro # 2 vCPU, 1GB RAM
+      - t4g.small # 2 vCPU, 2GB RAM 
+
+  pEc2KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+  
+  pEc2InstanceSubnet:
+    Type: AWS::EC2::Subnet::Id
+    Description: VPC public subnet ID for OpenVPN instance deployment
+
+  pOpenVpnAdminPassword:
+      Type: String
+      Description: Min 8 characters. Maximum 32 characters. No special characters.
+      NoEcho: true
+      MinLength: 8
+      MaxLength: 32
+      ConstraintDescription: Must contain at least 8 characters.
+
+  pEnableEc2Autorecovery:
+    Type: String
+    Description: CloudWatch to trigger EC2 auto reboot if status checks failed consecutively for 2 minutes
+    Default: false
+    AllowedValues:
+      - true
+      - false
+  
+  # DataDog
+  pDdMonitor:
+    Type: String
+    Description: Apply dd-monitor tag to ALB being created for monitoring
+    Default: false
+    AllowedValues:
+      - true
+      - false
+
+  pEnvironmentTag:
+    Type: String
+    Description: Environment type for default resource tagging.
+    Default: production
+    AllowedValues:
+      - production
+      - staging
+      - sandbox
+      - test
+      - development
+      - qa
+      - dr
+
+Metadata:
+
+  AWS::CloudFormation::Interface:
+    ParameterLabels:
+      pVpcId:
+        default: VPC ID
+      pVpcCidr :
+        default: VPC CIDR
+      pEc2InstanceType:
+        default: OpenVPN Instance Type
+      pEc2KeyPairName:
+        default: OpenVPN Instance KeyPair
+      pEc2InstanceSubnet:
+        default: VPC Public Subnet
+      pOpenVpnAdminPassword:
+        default: OpenVPN Admin Password
+      pEnableEc2Autorecovery:
+        default: Enable EC2 Autorecovery
+      pDdMonitor:
+        default: Monitor with DataDog?
+      pEnvironmentTag:
+        default: Environment Tag
+      pLatestAmiId:
+        default: Latest Ubuntu AMI Mapping
+
+    ParameterGroups:
+      - Label:
+          default: OpenVPN Instance Settings
+        Parameters:
+          - pEc2InstanceType
+          - pEc2KeyPairName
+          - pOpenVpnAdminPassword
+      - Label:
+          default: Networking Settings
+        Parameters:
+          - pVpcId
+          - pVpcCidr
+          - pEc2InstanceSubnet
+      - Label:
+          default: CloudWatch Autorecovery Settings
+        Parameters:
+          - pEnableEc2Autorecovery
+      - Label:
+          default: DataDog Settings
+        Parameters:
+          - pDdMonitor
+      - Label:
+          default: Tagging
+        Parameters:
+          - pEnvironmentTag
+      - Label:
+          default: AMI (Do Not Change)
+        Parameters:
+          - pLatestAmiId
+    
+Conditions:
+  CondEc2Autorecovery: !Equals [true, !Ref pEnableEc2Autorecovery]
+  CondDdMonitor: !Equals [true, !Ref pDdMonitor]
+
+Resources:
+
+  # Security Group
+
+  sgOpenVpn:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref pVpcId
+      GroupName: !Sub Sg-OpenVPN-${AWS::StackName}
+      GroupDescription: OpenVPN access
+      SecurityGroupIngress:
+        - IpProtocol: udp
+          FromPort: 1194
+          ToPort: 1194
+          CidrIp: 0.0.0.0/0
+          Description: OpenVPN Port
+        - IpProtocol: tcp
+          FromPort: 943
+          ToPort: 943
+          CidrIp: 0.0.0.0/0
+          Description: OpenVPN Admin Dashboard
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: OpenVPN Web Login
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+          Description: all
+      Tags:
+        - Key: Name
+          Value: !Sub Sg-OpenVPN-${AWS::StackName}
+        - Key: controlled-by
+          Value: !Sub cloudformation-${AWS::StackName}
+        - Key: environment
+          Value: !Ref pEnvironmentTag
+
+  # IAM Role
+
+  iamOpenVpnRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      RoleName: !Sub ${AWS::StackName}-role
+
+  # Instance Profile
+
+  iamOpenVpnInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref iamOpenVpnRole
+      InstanceProfileName: !Sub ${AWS::StackName}-instance-profile
+  
+  # OpenVPN EC2 Instance
+
+  ec2Openvpn:
+    Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          config:
+          - 00-CoreTasks
+        00-CoreTasks:
+          commands:
+            01-ChangeAdminPassword:
+              command: !Sub |
+                sacli --user openvpn --new_pass ${pOpenVpnAdminPassword} SetLocalPassword
+              waitAfterCompletion: '0'
+            02-Reboot:
+              command: reboot
+              waitAfterCompletion: '0'
+    Properties:
+      IamInstanceProfile: !Ref iamOpenVpnInstanceProfile
+      ImageId: !Ref pLatestAmiId
+      InstanceType: !Ref pEc2InstanceType
+      KeyName: !Ref pEc2KeyPairName
+      SubnetId: !Ref pEc2InstanceSubnet
+      SecurityGroupIds:
+        - !Ref sgOpenVpn
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeType: gp3
+            VolumeSize: 20
+        - DeviceName: /dev/sdf
+          Ebs:
+            VolumeType: gp3
+            VolumeSize: 8
+            DeleteOnTermination: false
+      UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            apt-get update && apt-get upgrade -y && apt-get install nvme-cli
+            hostnamectl set-hostname openvpn       
+            #Install cfn-init
+            apt-get -y install python3-pip
+            mkdir -p /opt/aws/
+            pip3 install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.tar.gz
+            ln -s /usr/local/init/ubuntu/cfn-hup /etc/init.d/cfn-hup     
+            #Openvpn volume mount for /usr/local/openvpn_as
+            mkdir /usr/local/openvpn_as
+            # EBS sdf mount is the device which will be mounted on /usr/local/openvpn_as
+            if ! $(mount | grep -q /mnt) ; then
+                # Detected NVME drives
+                # They do not always have a consistent drive number, this will scan for the drives slot in the hypervisor
+                # and mount the correct ones, with sda1 always being the base disk and sdb being the extra, larger, disk
+                if lshw | grep nvme &>/dev/null; then
+                    for blkdev in $(nvme list | awk '/^\/dev/ { print $1 }'); do
+                        mapping=$(nvme id-ctrl --raw-binary "$blkdev" | cut -c3073-3104 | tr -s ' ' | sed 's/ $//g')
+                        if [[ $mapping == "sda1" ]]; then
+                            echo "$blkdev is $mapping skipping..."
+                        elif [[ $mapping == "sdf" ]]; then
+                            echo "$blkdev is $mapping formatting and mounting..."
+                            mkfs.xfs $blkdev
+                            echo "$blkdev    /usr/local/openvpn_as    xfs    defaults    0    1" >> /etc/fstab
+                            mount $blkdev
+                        else
+                            echo "detected unknown drive letter $blkdev: $mapping. Skipping..."
+                        fi
+                    done
+                else
+                    echo "Configuring /dev/xvdf..."
+                    mkfs.xfs /dev/xvdf
+                    echo "/dev/xvdf    /usr/local/openvpn_as    xfs    defaults    0    1" >> /etc/fstab
+                    mount /dev/xvdf
+                fi
+            else
+              echo "detected drive already mounted to /mnt, skipping mount..."
+              lsblk | grep mnt
+            fi
+            # OpenVPN
+            apt update && apt -y install ca-certificates wget net-tools gnupg
+            wget https://as-repository.openvpn.net/as-repo-public.asc -qO /etc/apt/trusted.gpg.d/as-repository.asc
+            echo "deb [arch=arm64 signed-by=/etc/apt/trusted.gpg.d/as-repository.asc] http://as-repository.openvpn.net/as/debian jammy main">/etc/apt/sources.list.d/openvpn-as-repo.list
+            apt update && apt -y install openvpn-as
+            echo "export PATH=$PATH:/usr/local/openvpn_as/scripts" > /etc/profile.d/openvpn.sh
+            source /etc/profile.d/openvpn.sh
+            sacli stop
+            echo -e "LOG_ROTATE_LENGTH=1000000\n" >> /usr/local/openvpn_as/etc/as.conf
+            (crontab -l 2>/dev/null; echo "0 4 * * * rm /var/log/openvpnas.log.{15..1000} >/dev/null 2>&1") | crontab -
+            sacli --key "host.name" --value "${ec2Eip}" ConfigPut
+            sacli --key "vpn.client.routing.reroute_dns" --value "false" ConfigPut
+            sacli --key "vpn.client.routing.reroute_gw" --value "false" ConfigPut
+            sacli --key "vpn.server.routing.private_network.0" --value "${pVpcCidr}" ConfigPut
+            sacli --key "cs.tls_version_min" --value "1.2" ConfigPut
+            sacli --key "ssl_api.tls_version_min" --value "1.2" ConfigPut
+            sacli start
+            sacli ConfigQuery
+            /usr/local/bin/cfn-init -v --stack ${AWS::StackName} --resource ec2Openvpn --configsets config --region ${AWS::Region}
+      DisableApiTermination: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}
+        - Key: controlled-by
+          Value: !Sub cloudformation-${AWS::StackName}
+        - Key: environment
+          Value: !Ref pEnvironmentTag
+        - Key: backup
+          Value: true
+        - Key: dd-monitor
+          Value: !If [CondDdMonitor, true, ""]
+        
+  # EIP
+
+  ec2Eip:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  ec2EipAssoc:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      InstanceId: !Ref ec2Openvpn
+      AllocationId: !GetAtt ec2Eip.AllocationId
+  
+  # CloudWatch Alarm for EC2 AutoRecovery
+
+  ec2Autorecover:
+    Condition: CondEc2Autorecovery
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Auto recover EC2 instance when status checks failed consequetively for 2 minutes
+      AlarmActions:
+        # Works on: A1, C3, C4, C5, C5n, M3, M4, M5, M5a, P3, R3, R4, R5, R5a, T2, T3, T3a, X1, or X1e
+        # Does not work on: C5d, M5d, R5d, F1, H1, D2, I2, I3, I3en, P3dn, Z1d, and bare metal instances
+        - !Sub arn:aws:automate:${AWS::Region}:ec2:recover
+      Namespace: AWS/EC2
+      MetricName: StatusCheckFailed_System
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      Period: 60
+      Statistic: Minimum
+      Threshold: 0
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref ec2Openvpn
+
+  # CloudWatch Alarm for EC2 AutoRecovery
+  
+  ec2AutorecoverReboot:
+    Condition: CondEc2Autorecovery
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Reboot an instance when status checks failed consequetively for 2 minutes
+      AlarmActions:
+        - !Sub arn:aws:automate:${AWS::Region}:ec2:reboot
+      Namespace: AWS/EC2
+      MetricName: StatusCheckFailed_Instance
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      Period: 60
+      Statistic: Minimum
+      Threshold: 0
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref ec2Openvpn
+
+Outputs:
+
+  OpenVpnInstanceId:
+    Value: !Ref ec2Openvpn
+    Description: OpenVPN Instance ID
+
+  OpenVPNServerURL:
+    Value: !Sub https://${ec2Eip}
+    Description: OpenVPN URL
+
+  TemplateVersion:
+    Value: ec2-openvpn-ubuntu-arm64-v2.1
+    Description: Template Version
