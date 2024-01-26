@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: > 
-  Github V2 Source action, Build ECR Image, and push to ECS service (in-place).
+  Github V2 Source action, Build ECR Images, and deploy with SAM CLI
 
 
 Parameters:
@@ -10,7 +10,7 @@ Parameters:
   pApplicationName:
     Type: String
     Description: Used to name CI/CD resources.
-    Default: srirs
+    Default: ephemeral
 
   # GitHub Repo
 
@@ -54,42 +54,6 @@ Parameters:
     Description: Path and name for the Buildspec in repo
     Default: buildspec.yml
 
-  pBaseEcrRepo:
-    Type: String
-    Description: ECR Repo Name where base docker image is pushed
-    Default: my-base-ecr-repo
-
-  pBaseImageTag:
-    Type: String
-    Description: Base Docker Image Tag
-    Default: "16"
-
-  # ECS
-
-  pEcrRepo:
-    Type: String
-    Description: ECR Repo Name
-    Default: my-ecr-repo
-
-
-  pEcsClusterName:
-    Type: String
-    Description: ECS Cluster Name
-    Default: ecs-dev
-
-  pEcsServiceName:
-    Type: String
-    Description: ECS Service Name
-    Default: myservice
-
-  pContainerName:
-    Type: String
-    Description: Name of Container
-  
-  pImageDefinitionFile:
-    Type: String
-    Description: Image Definition file path
-    Default: imagedefinitions.json
 
 
   # Tagging
@@ -125,20 +89,6 @@ Metadata:
         default: CodeBuild Docker Image
       pBuildSpecPath:
         default: Buildspec file path
-      pBaseEcrRepo: 
-        default: Base ECR Repo  
-      pBaseImageTag:  
-        default: Base Image Tag
-      pEcrRepo:
-        default: Name of ECR Repository
-      pEcsClusterName:
-        default: Name of ECS Cluster
-      pEcsServiceName:
-        default: Name of ECS Service to Update
-      pContainerName:
-        default: Name of Container
-      pImageDefinitionFile:
-        default: Image Definition File Path
       pEnvironmentTag:
         default: Environment Tag  
 
@@ -160,16 +110,8 @@ Metadata:
           - pCodeBuildComputeType
           - pCodeBuildImage
           - pBuildSpecPath
-          - pBaseEcrRepo  
-          - pBaseImageTag
-      - Label:
-          default: ECS Settings
-        Parameters:
-          - pEcrRepo
-          - pEcsClusterName
-          - pEcsServiceName
-          - pContainerName
-          - pImageDefinitionFile
+          # - pBaseEcrRepo  
+          # - pBaseImageTag
       - Label:
           default: Tagging
         Parameters:
@@ -217,38 +159,47 @@ Resources:
                 Resource:
                   - !Sub "arn:aws:s3:::${artifactBucket}"
                   - !Sub "arn:aws:s3:::${artifactBucket}/*"
-        - PolicyName: ECR
+        - PolicyName: GitCloneConnection
           PolicyDocument:
             Version: 2012-10-17
             Statement:
               - Effect: Allow
                 Action:
-                  - ecr:PutLifecyclePolicy
-                  - ecr:PutImageTagMutability
-                  - ecr:PutImageScanningConfiguration
-                  - ecr:BatchGetImage
-                  - ecr:CompleteLayerUpload
-                  - ecr:DescribeImages
-                  - ecr:TagResource
-                  - ecr:ListTagsForResource
-                  - ecr:UploadLayerPart
-                  - ecr:InitiateLayerUpload
-                  - ecr:BatchCheckLayerAvailability
-                  - ecr:PutImage
-                Resource:
-                  - !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${pEcrRepo}
-        - PolicyName: BASE-ECR  
-          PolicyDocument: 
-            Version: 2012-10-17 
-            Statement:  
-              - Effect: Allow 
-                Action: 
-                  - ecr:BatchGetImage 
-                  - ecr:DescribeImages  
-                  - ecr:ListTagsForResource 
-                  - ecr:GetDownloadUrlForLayer
+                  - codestar-connections:UseConnection
                 Resource: 
-                  - !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${pBaseEcrRepo}
+                  - !Ref pCodestarConnectionArn
+        # - PolicyName: ECR
+        #   PolicyDocument:
+        #     Version: 2012-10-17
+        #     Statement:
+        #       - Effect: Allow
+        #         Action:
+        #           - ecr:PutLifecyclePolicy
+        #           - ecr:PutImageTagMutability
+        #           - ecr:PutImageScanningConfiguration
+        #           - ecr:BatchGetImage
+        #           - ecr:CompleteLayerUpload
+        #           - ecr:DescribeImages
+        #           - ecr:TagResource
+        #           - ecr:ListTagsForResource
+        #           - ecr:UploadLayerPart
+        #           - ecr:InitiateLayerUpload
+        #           - ecr:BatchCheckLayerAvailability
+        #           - ecr:PutImage
+        #         Resource:
+        #           - !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${pEcrRepo}
+        # - PolicyName: BASE-ECR  
+        #   PolicyDocument: 
+        #     Version: 2012-10-17 
+        #     Statement:  
+        #       - Effect: Allow 
+        #         Action: 
+        #           - ecr:BatchGetImage 
+        #           - ecr:DescribeImages  
+        #           - ecr:ListTagsForResource 
+        #           - ecr:GetDownloadUrlForLayer
+        #         Resource: 
+        #           - !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${pBaseEcrRepo}
         - PolicyName: ECR-Token
           PolicyDocument:
             Version: 2012-10-17
@@ -272,21 +223,27 @@ Resources:
         Type: LINUX_CONTAINER
         PrivilegedMode: true
         EnvironmentVariables:
-          - Name: ECR_REPO_NAME
-            Value: !Ref pEcrRepo
+          - Name: PULL_REQUEST_ID
+            Value: "#{variables.PR_ID}"
+            Type: PLAINTEXT
+          - Name: COMMIT_ID
+            Value: "#{variables.COMMIT_ID}"
+            Type: PLAINTEXT
+          - Name: PR_EVENT
+            Value: "#{variables.PR_EVENT}"
             Type: PLAINTEXT
           - Name: ACCOUNT_ID
             Value: !Ref "AWS::AccountId"
             Type: PLAINTEXT
-          - Name: CONTAINER_NAME
-            Value: !Ref pContainerName
-            Type: PLAINTEXT
-          - Name: BASE_IMAGE_REPO_NAME  
-            Value: !Ref pBaseEcrRepo  
-            Type: PLAINTEXT 
-          - Name: BASE_IMAGE_TAG 
-            Value: !Ref pBaseImageTag 
-            Type: PLAINTEXT
+          # - Name: CONTAINER_NAME
+          #   Value: !Ref pContainerName
+          #   Type: PLAINTEXT
+          # - Name: BASE_IMAGE_REPO_NAME  
+          #   Value: !Ref pBaseEcrRepo  
+          #   Type: PLAINTEXT 
+          # - Name: BASE_IMAGE_TAG 
+          #   Value: !Ref pBaseImageTag 
+          #   Type: PLAINTEXT
       ServiceRole: !GetAtt codeBuildServiceRole.Arn
       Source:
         Type: CODEPIPELINE
@@ -384,10 +341,20 @@ Resources:
         Type: S3
       Name: !Sub ${pApplicationName}-pipeline
       RoleArn: !GetAtt codePipelineServiceRole.Arn
+      PipelineType: V2
+      RestartExecutionOnUpdate: false
+      Variables:
+        - Name: PR_ID
+          Description: Pull Request ID
+        - Name: COMMIT_ID
+          Description: Commit Hash
+        - Name: PR_EVENT
+          Description: 'Type of PR event. Valid values: [opened, synchronize, reopened, closed]'
       Stages:
         - Name: Source
           Actions:
             - Name: Source
+              Namespace: SourceVariables
               ActionTypeId:
                 Category: Source
                 Owner: AWS
@@ -397,10 +364,23 @@ Resources:
                 FullRepositoryId: !Sub ${pRepoOwner}/${pRepoName}
                 ConnectionArn: !Ref pCodestarConnectionArn
                 BranchName: !Ref pTriggerBranch
+                DetectChanges: false
+                OutputArtifactFormat: CODEBUILD_CLONE_REF # Code Build Git Full Clone
               OutputArtifacts:
                 - Name: SourceArtifact
         - Name: Build
           Actions:
+            - Name: ManualApproval
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: 1
+              Configuration:
+                CustomData: "Approve ephemeral deployment. Pull Request#: #{variables.PR_ID}"
+                # ExternalEntityLink: !Sub "https://github.com/${pRepoOwner}/${pRepoName}/commit/#{SourceVariables.CommitId}"
+              RunOrder: 1
+
             - Name: CodeBuild
               ActionTypeId:
                 Category: Build
@@ -410,23 +390,10 @@ Resources:
               Configuration:
                 ProjectName: !Ref codeBuildProject
               InputArtifacts:
-                - Name:  SourceArtifact
+                - Name: SourceArtifact
               OutputArtifacts:
                 - Name: BuildArtifact
-        - Name: Deploy
-          Actions:
-            - Name: ECS
-              ActionTypeId:
-                Category: Deploy
-                Owner: AWS
-                Provider: ECS
-                Version: 1
-              Configuration:
-                ClusterName: !Ref pEcsClusterName
-                ServiceName: !Ref pEcsServiceName
-                FileName: !Ref pImageDefinitionFile
-              InputArtifacts:
-                - Name:  BuildArtifact
+              RunOrder: 2
 
 Outputs:
 

@@ -1,0 +1,44 @@
+version: 0.2
+env:
+  git-credential-helper: yes
+
+phases:
+  install:
+    runtime-versions:
+      docker: 18
+    commands:
+      - pip3 install --upgrade aws-sam-cli
+  pre_build:
+    commands:
+      - echo Listing Source Files...
+      # list all files by most recently modified in reverse order
+      - ls -ltra
+
+
+      - echo Checking out to default 'HEAD' branch
+      - git checkout $(git symbolic-ref refs/remotes/origin/HEAD | sed 's,refs/remotes/origin/,,1')  
+      - echo Listing master branch Source Files...
+      - ls -ltra
+      # - echo Logging in to Amazon ECR...
+      # - $(aws ecr get-login --no-include-email --region $AWS_DEFAULT_REGION)
+      # # Use the Commit Hash, Otherwise default to 'latest'
+      # - IMAGE_TAG=${$CODEBUILD_RESOLVED_SOURCE_VERSION:-latest}
+      # - REPOSITORY_URI=$ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPO_NAME
+  # build:
+  #   commands:
+  #     - echo Build started on `date`
+  #     - echo Building the Docker image...
+  #     # Passing Dockerfile 'ARG' using --build-arg flag
+  #     - docker build -f docker/Dockerfile --build-arg AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION --build-arg ACCOUNT_ID=$ACCOUNT_ID --build-arg BASE_IMAGE_REPO_NAME=$BASE_IMAGE_REPO_NAME --build-arg BASE_IMAGE_TAG=$BASE_IMAGE_TAG -t $REPOSITORY_URI:latest .
+  #     - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG
+  # post_build:
+  #   commands:
+  #     - echo Build completed on `date`
+  #     - echo Pushing the Docker image...
+  #     - docker push $REPOSITORY_URI:latest
+  #     - docker push $ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPO_NAME:$IMAGE_TAG
+  #     - echo Writing image definitions file...
+
+# artifacts:
+#   files: imagedefinitions.json
+ 
