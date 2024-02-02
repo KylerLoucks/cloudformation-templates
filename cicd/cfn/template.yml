@@ -1,0 +1,415 @@
+Transform: AWS::Serverless-2016-10-31
+Description: Deploy the production Amazon SageMaker Endpoint with Autoscaling, Model Monitoring Schedule and API Gateway Lambda.
+Parameters:
+  ImageRepoUri:
+    Type: String
+    Description: Uri of the docker (ECR) model image
+    Default: 523806997098.dkr.ecr.us-east-1.amazonaws.com/ecg-io-model:v5
+  ModelName:
+    Type: String
+    Description: Name of the model
+    Default: ecgio
+  CommitId:
+    Type: String
+    Description: Id of the Codepipeline + SagemakerJobs
+  ModelVariant:
+    Type: String
+    Description: Name of the model variant
+    Default: heartio
+  ScheduleMetricName:
+    Type: String
+    Description: The metric to alarm on for schedule
+    Default: ecgio
+  ScheduleMetricThreshold:
+    Type: Number
+    Description: The metric alarm threshold
+    Default: 60
+  KmsKeyId:
+    Description: AWS KMS key ID used to encrypt data at rest on the ML storage volume attached to endpoint config and S3 data capture.
+    Type: String
+    Default: 61c6d2ca-9fa5-4324-9844-d333d692cb86
+  pDomainUrl:
+    Description: URL for cognito callbacks
+    Type: String
+    Default: test.com
+  pEndpointInstanceType:
+    Description: Instance type to use for SageMaker endpoint.
+    Type: String
+    Default: ml.m5.large #ml.g4dn.12xlarge
+  pEnvironmentTag:
+    Type: String
+    Description: Environment type for default resource tagging
+    AllowedValues:
+      - production
+      - staging
+      - sandbox
+      - test
+      - development
+      - qa
+    Default: production
+
+Resources:
+  # Cognito User Pool Define users attributes
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub ${ModelName}-${pEnvironmentTag}-userpool
+      AccountRecoverySetting: 
+        RecoveryMechanisms: 
+          - Name: verified_email  # Recovery only by email
+            Priority: 1
+      AutoVerifiedAttributes:
+        - email
+      # UsernameAttributes:
+      #   - email
+      AliasAttributes: 
+        - email
+        - preferred_username
+      UsernameConfiguration: 
+        CaseSensitive: false # Username sign-in is not case sensitive
+      Schema:
+        - AttributeDataType: String
+          Mutable: true
+          Name: name
+          Required: true
+
+  ## Client Pool to define the Authentication Mechanism and Token Settings
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub ${ModelName}-${pEnvironmentTag}-user-pool-client
+      UserPoolId: !Ref UserPool
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows:
+        - code
+        - implicit
+      AllowedOAuthScopes:
+        - aws.cognito.signin.user.admin
+        - email
+        - openid
+        - phone
+        - profile
+      CallbackURLs:
+        - !Sub https://${pDomainUrl}/signin
+      LogoutURLs:
+        - !Sub https://${pDomainUrl}/signout
+      EnableTokenRevocation: true # default value.
+      ExplicitAuthFlows:
+        # - ALLOW_CUSTOM_AUTH
+        # - ALLOW_REFRESH_TOKEN_AUTH
+        # - ALLOW_USER_SRP_AUTH
+        - USER_PASSWORD_AUTH
+      AccessTokenValidity: 60 # (minutes) default value.
+      IdTokenValidity: 60 # (minutes) default value.
+      RefreshTokenValidity: 30 # (days) default value.
+
+      PreventUserExistenceErrors: ENABLED # default value.
+      SupportedIdentityProviders:
+        - COGNITO
+      TokenValidityUnits:
+        AccessToken: minutes
+        IdToken: minutes
+        RefreshToken: days
+      
+
+
+
+
+  # =================================
+  # ========== API GATEWAY ==========
+  # =================================
+  ApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Sub ${pEnvironmentTag}
+      AccessLogSetting:
+        DestinationArn: !GetAtt LogGroup.Arn
+        Format: '{"requestTime":"$context.requestTime","ip": "$context.identity.sourceIp","requestId":"$context.requestId","httpMethod":"$context.httpMethod","path":"$context.path","resourcePath":"$context.resourcePath","status":$context.status,"responseLatency":$context.responseLatency}'
+      MethodSettings:
+        - HttpMethod: '*'
+          ResourcePath: '/*'
+          LoggingLevel: 'INFO'
+      Cors:
+        AllowMethods: "'POST, OPTIONS, GET'"
+        AllowHeaders: "'Authorization'"
+        AllowOrigin: "'*'"
+        MaxAge: "'600'"
+      Auth:
+        Authorizers:
+          CognitoAuthorizer:
+            Type: COGNITO_USER_POOLS
+            UserPoolArn: !GetAtt UserPool.Arn
+
+
+  # This role is created to enable API Gateway to push logs to CloudWatch for monitoring
+  ApiGatewayRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ModelName}-${pEnvironmentTag}-api-gateway
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action:
+              - sts:AssumeRole
+        Version: 2012-10-17
+      Policies:
+        - PolicyName: !Sub ${pEnvironmentTag}ApiGatewayInvokeSageMakerPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sagemaker:InvokeEndpoint
+                Resource: "arn:aws:sagemaker:*:*:endpoint/*"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+
+
+
+  Account:
+    Type: "AWS::ApiGateway::Account"
+    Properties:
+      CloudWatchRoleArn: !GetAtt ApiGatewayRole.Arn
+
+  SageMakerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambdas/predict/
+      Handler: app.handler
+      MemorySize: 256
+      Runtime: python3.9
+      VpcConfig: !Ref AWS::NoValue
+      Environment:
+        Variables:
+          ENDPOINT_NAME: !Sub ${Endpoint.EndpointName}
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /predict
+            Method: POST
+            RestApiId: !Ref ApiGatewayApi
+            RequestParameters:
+              - method.request.header.Authorization
+            Auth:
+              Authorizer: CognitoAuthorizer
+      Policies:   
+        - Version: 2012-10-17
+          Statement:
+            - Sid: InvokeSageMaker
+              Effect: Allow
+              Action:
+                - sagemaker:InvokeEndpoint
+              Resource: "*"
+
+
+  LoginFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambdas/login/
+      Handler: app.handler
+      MemorySize: 256
+      Runtime: python3.9
+      VpcConfig: !Ref AWS::NoValue
+      Environment:
+        Variables:
+          COGNITO_CLIENT_ID: !Ref UserPoolClient
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /login/{username}/{password}
+            Method: GET
+            RestApiId: !Ref ApiGatewayApi
+      Policies:
+        - Version: 2012-10-17
+          Statement:
+            - Sid: InvokeCognito
+              Effect: Allow
+              Action:
+                - cognito-idp:InitiateAuth
+              Resource: "*"
+
+
+
+
+
+
+
+
+
+
+
+  #API Gateway Log Group Retention 7 days
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub ${ModelName}-${pEnvironmentTag}-log-group-api
+      RetentionInDays: 7
+
+  # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-sagemaker-model.html#aws-resource-sagemaker-model--examples--SageMaker_Model_Endpoint_Example--yaml
+  SageMakerEndpointDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${pEnvironmentTag}-SageMakerEndpoint-DeployRole
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sagemaker.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SageMakerEndpointDeployPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: sagemaker:CreateEndpoint
+                Resource: "*"
+        - PolicyName: S3DataBucketAccess
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: s3:*
+                Resource:
+                  - !Sub arn:aws:s3:::sagemaker-${AWS::Region}-${AWS::AccountId}/*
+                  - !Sub arn:aws:s3:::sagemaker-${AWS::Region}-${AWS::AccountId}
+        - PolicyName: AllowECRPullImages
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: "*"
+                #  - ecr:BatchGetImage
+                #  - ecr:GetDownloadUrlForLayer
+                Resource:
+                  "*"
+                  # - !Sub "arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/ecg-io-model"
+
+  SageMakerAutoScalingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub SageMaker-AutoScaling-Role-${AWS::StackName}
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sagemaker.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SageMakerAutoScalingPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sagemaker:CreateEndpoint
+                  - sagemaker:DeleteEndpoint
+                  - sagemaker:InvokeEndpoint
+                  - cloudwatch:GetMetricStatistics
+                  - cloudwatch:PutMetricAlarm
+                Resource: "*"
+        - PolicyName: Admin
+          PolicyDocument: 
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: "*"
+                Resource: "*"
+
+  Model:
+    Type: AWS::SageMaker::Model
+    Properties:
+      ModelName: !Sub ${ModelName}-${pEnvironmentTag}-${CommitId}
+      PrimaryContainer:
+        Image: !Ref ImageRepoUri
+        # ModelDataUrl: !Sub s3://sagemaker-${AWS::Region}-${AWS::AccountId}/${ModelName}/${ModelName}-${CommitId}/output/model.tar.gz
+      ExecutionRoleArn: !GetAtt SageMakerEndpointDeployRole.Arn
+
+  EndpointConfig:
+    Type: AWS::SageMaker::EndpointConfig
+    Properties:
+      ProductionVariants:
+        - InitialInstanceCount: 1
+          InitialVariantWeight: 1.0
+          InstanceType: !Ref pEndpointInstanceType
+          ModelName: !GetAtt Model.ModelName
+          VariantName: !Sub ${ModelVariant}-${pEnvironmentTag}-${ModelName}
+      DataCaptureConfig:
+        CaptureContentTypeHeader:
+          CsvContentTypes:
+            - "text/csv"
+          JsonContentTypes:
+            - "application/json"
+        CaptureOptions:
+          - CaptureMode: Input
+          - CaptureMode: Output
+        DestinationS3Uri: !Sub s3://sagemaker-${AWS::Region}-${AWS::AccountId}/${ModelName}/datacapture
+        EnableCapture: True
+        InitialSamplingPercentage: 100
+        KmsKeyId: !Ref KmsKeyId
+      EndpointConfigName: !Sub ${ModelName}-pec-${pEnvironmentTag}-${CommitId}
+      KmsKeyId: !Ref KmsKeyId # Comment out when using GPU instance type!
+
+  Endpoint:
+    Type: "AWS::SageMaker::Endpoint"
+    Properties:
+      EndpointName: !Sub ${ModelName}-${CommitId}-${pEnvironmentTag}
+      EndpointConfigName: !GetAtt EndpointConfig.EndpointConfigName
+
+  SagemakerScheduleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ModelName}-${pEnvironmentTag}-metric-gt-threshold
+      AlarmDescription: Schedule Metric > Threshold
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: Endpoint
+          Value: !GetAtt Endpoint.EndpointName
+        - Name: MonitoringSchedule
+          Value: !Sub ${ModelName}-pms
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      MetricName: !Ref ScheduleMetricName
+      Namespace: aws/sagemaker/Endpoints/data-metrics
+      Period: 60
+      Statistic: Average
+      Threshold: !Ref ScheduleMetricThreshold
+
+  AutoScaling:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MaxCapacity: 10
+      MinCapacity: 2
+      ResourceId: !Sub endpoint/${Endpoint.EndpointName}/variant/${ModelVariant}-${pEnvironmentTag}-${ModelName}
+      RoleARN: !GetAtt SageMakerAutoScalingRole.Arn
+      ScalableDimension: sagemaker:variant:DesiredInstanceCount
+      ServiceNamespace: sagemaker
+    DependsOn: Endpoint
+
+  AutoScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: SageMakerVariantInvocationsPerInstance
+      PolicyType: TargetTrackingScaling
+      ResourceId: !Sub endpoint/${Endpoint.EndpointName}/variant/${ModelVariant}-${pEnvironmentTag}-${ModelName}
+      ScalableDimension: sagemaker:variant:DesiredInstanceCount
+      ServiceNamespace: sagemaker
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 750.0
+        ScaleInCooldown: 60
+        ScaleOutCooldown: 60
+        PredefinedMetricSpecification:
+          PredefinedMetricType: SageMakerVariantInvocationsPerInstance
+    DependsOn: AutoScaling
+
+
+# Outputs:
+#   # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
+#   # Find out more about other implicit resources you can reference within SAM
+#   # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
