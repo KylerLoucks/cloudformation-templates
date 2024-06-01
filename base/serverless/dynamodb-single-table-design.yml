@@ -1,3 +1,5 @@
+
+Resources:
   dynamoDBTable:
     Type: AWS::DynamoDB::Table
     UpdateReplacePolicy: Retain

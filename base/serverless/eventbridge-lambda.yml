@@ -45,6 +45,10 @@ Resources:
 
           def handler(event, context):
             print(event)
+      Tags:
+        - Key: map-migrated
+          Value: dont-replace-me
+
 
   lambdaLogGroup:
     Type: AWS::Logs::LogGroup
@@ -53,24 +57,24 @@ Resources:
       RetentionInDays: 90
 
 
-  permissionForEventsToInvokeLambda: 
-    Type: AWS::Lambda::Permission
-    Properties: 
-      FunctionName: !Ref lambdaFunction
-      Action: lambda:InvokeFunction
-      Principal: events.amazonaws.com
-      SourceArn: 
-        !GetAtt eventBridgeRule.Arn
+  # permissionForEventsToInvokeLambda: 
+  #   Type: AWS::Lambda::Permission
+  #   Properties: 
+  #     FunctionName: !Ref lambdaFunction
+  #     Action: lambda:InvokeFunction
+  #     Principal: events.amazonaws.com
+  #     SourceArn: 
+  #       !GetAtt eventBridgeCronScheduleRule.Arn
   
   
   
-  eventBridgeCronScheduleRule:
-    Type: AWS::Events::Rule
-    Properties:
-      Name: !Sub ${AWS::StackName}-rule
-      Description: Invoke Lambda functions on a schedule
-      ScheduleExpression: !Sub cron(0 20 * * ? *)
-      State: ENABLED
-      Targets:
-        - Arn: !GetAtt lambdaFunction.Arn
-          Id: targetfunction1
+  # eventBridgeCronScheduleRule:
+  #   Type: AWS::Events::Rule
+  #   Properties:
+  #     Name: !Sub ${AWS::StackName}-rule
+  #     Description: Invoke Lambda functions on a schedule
+  #     ScheduleExpression: !Sub cron(0 20 * * ? *)
+  #     State: ENABLED
+  #     Targets:
+  #       - Arn: !GetAtt lambdaFunction.Arn
+  #         Id: targetfunction1

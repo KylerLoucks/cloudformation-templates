@@ -1,0 +1,255 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: > 
+  Template creates an S3 bucket to aggregate CloudTrail Organizational Trail logs. Typically deployed into an Audit account as part of an AWS Organization.
+
+
+Parameters:   
+  pOrganizationId:
+    Type: String
+    Description: AWS Organization ID. (e.g. o-abcdefghijk)
+
+  pManagementAccountId:
+    Type: String
+    Description: AWS Account ID of the Organization Management Account
+
+  pManagementAccountTrailName:
+    Type: String
+    Description: Name of the Organization Management Account's CloudTrail organizational trail
+
+  # Hipaa
+  pHipaaClient:
+    Type: String
+    Description: Client to follow HIPAA compliance (Affects Bucket Lifecycle retention)
+    Default: false
+    AllowedValues:
+      - true
+      - false
+
+  # Tagging
+  pEnvironmentTag:
+    Type: String
+    Description: Environment for default resource tagging
+    Default: audit
+    AllowedValues:
+      - production
+      - development
+      - audit
+
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterLabels:
+      pHipaaClient:
+        default: HIPAA Compliance
+      pEnvironmentTag:
+        default: Environment Tag
+
+    ParameterGroups:
+      - Label:
+          default: Bucket Settings
+        Parameters:
+          - pHipaaClient
+          - pManagementAccountId
+          - pManagementAccountTrailName
+          - pOrganizationId
+      - Label:
+          default: Tagging
+        Parameters:
+          - pEnvironmentTag
+
+Conditions:
+  CondHipaa: !Equals [true, !Ref pHipaaClient]
+
+
+Resources:
+
+
+  # ==============================================
+  # Access Logging Bucket - CloudTrail and Config
+  # ==============================================
+  accessLoggingBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub ${AWS::AccountId}-cloudtrail-s3-access-logging
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: access-logs-archive-and-delete
+            Status: Enabled
+            Transition:
+              StorageClass: DEEP_ARCHIVE
+              TransitionInDays: 60
+            ExpirationInDays: !If [CondHipaa, 2555, 730] #deleted after 2 years if non-HIPAA client. Retained for 7 years if HIPAA
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref pEnvironmentTag
+
+
+  AWSLoggingBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: CondHipaa
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Bucket: !Ref accessLoggingBucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Id: AWSLoggingAccessToBucket
+        Statement:
+          - Sid: DenyUnEncryptedObjectUploads
+            Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource: !Join
+              - ""
+              - - !GetAtt
+                  - accessLoggingBucket
+                  - Arn
+                - /*
+            Condition:
+              Bool:
+                "aws:SecureTransport": "false"
+          - Sid: Restrict Delete* Actions
+            Effect: Deny
+            Principal: "*"
+            Action: s3:Delete*
+            Resource: !Join
+              - ""
+              - - !GetAtt
+                  - accessLoggingBucket
+                  - Arn
+                - /*
+          - Sid: DenyUnEncryptedObjectUploads
+            Effect: Deny
+            Principal: "*"
+            Action: s3:PutObject
+            Resource: !Join
+              - ""
+              - - !GetAtt
+                  - accessLoggingBucket
+                  - Arn
+                - /*
+            Condition:
+              StringNotEquals:
+                "s3:x-amz-server-side-encryption": AES256
+          - Sid: AllowLogDelivery
+            Effect: Allow
+            Principal:
+              Service: "delivery.logs.amazonaws.com"
+            Action:
+              - s3:PutObject
+              - s3:GetBucketAcl
+            Resource:
+              - !Join
+                - ""
+                - - !GetAtt
+                    - accessLoggingBucket
+                    - Arn
+                  - /*
+            Condition:
+              StringEquals:
+                "s3:x-amz-acl": "bucket-owner-full-control"
+
+
+  cloudtrailBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub cloudtrail-organization-logs-${AWS::AccountId}
+      # BucketEncryption:
+      #   ServerSideEncryptionConfiguration:
+      #     - ServerSideEncryptionByDefault:
+      #         KMSMasterKeyID: !Ref cloudtrailKms
+      #         SSEAlgorithm: aws:kms
+      LoggingConfiguration:
+        DestinationBucketName: !Ref accessLoggingBucket
+        LogFilePrefix: !Sub cloudtrail/cloudtrail-${AWS::AccountId}
+      LifecycleConfiguration:
+        Rules:
+          - Id: cloudtrail-logs-archive-and-delete
+            Status: Enabled
+            Transition:
+              StorageClass: DEEP_ARCHIVE
+              TransitionInDays: 240
+            ExpirationInDays: !If [CondHipaa, 2555, 730] #deleted after 2 years if non-HIPAA client. Retained for 7 years if HIPAA
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref pEnvironmentTag
+
+  # https://docs.aws.amazon.com/awscloudtrail/latest/userguide/create-s3-bucket-policy-for-cloudtrail.html
+  cloudtrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref cloudtrailBucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: CloudtrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !Sub arn:aws:s3:::${cloudtrailBucket}
+            Condition:
+              StringEquals:
+                aws:SourceArn: !Sub arn:aws:cloudtrail:${AWS::Region}:${pManagementAccountId}:trail/${pManagementAccountTrailName}
+
+          - Sid: CloudtrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub arn:aws:s3:::${cloudtrailBucket}/AWSLogs/${pManagementAccountId}/*
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+                aws:SourceArn: !Sub arn:aws:cloudtrail:${AWS::Region}:${pManagementAccountId}:trail/${pManagementAccountTrailName}
+
+
+          - Sid: CloudtrailOrganizationWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub arn:aws:s3:::${cloudtrailBucket}/AWSLogs/${pOrganizationId}/*
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+                aws:SourceArn: !Sub arn:aws:cloudtrail:${AWS::Region}:${pManagementAccountId}:trail/${pManagementAccountTrailName}
+
+
+          # Possibly redundant to have this.
+          - Sid: DenyUnEncryptedObjectUploads
+            Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource: !Sub arn:aws:s3:::${cloudtrailBucket}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+          - Sid: Restrict Delete* Actions
+            Effect: Deny
+            Principal: "*"
+            Action: s3:Delete*
+            Resource: !Sub arn:aws:s3:::${cloudtrailBucket}/*
+
+Outputs:
+  TemplateVersion:
+    Value: cloud303-organization-audit-bucket-0.1
+    Description: Template Version
