@@ -2,11 +2,9 @@
 
 # Usage
 
-1. Deploy an `Organizational` CloudTrail into the Management (Payer) account of the AWS Organization.
-- You can do so by deploying the [organization-trail.yml](/security-tools/cloudtrail-organization/organization-trail.yml) template.
+1. Deploy the [S3 Audit Logs Template](/security-tools/cloudtrail-organization/organization-trail-audit-logs.yml) template into the designated `Audit` AWS Account
 
-
-2. Deploy the [Audit S3 Bucket CloudFormation template](/security-tools/cloudtrail-organization/organization-trail-audit-logs.yml) into the designated AWS organization `Audit` account.
+2. Deploy the [Organization CloudTrail template](/security-tools/cloudtrail-organization/organization-trail.yml) into the designated AWS Organization `Management` (Payer) Account
 
 > [!Note]
 > All of the child accounts in the organization no longer need CloudTrail enabled.
@@ -35,7 +33,7 @@ Description: Name of the Organization Management Account's organizational CloudT
 Default: cloudtrail-organization
 
 > [!Note]
-> The must match for both the value used for the `pCloudTrailName` parameter in the `Organization Trail` template
+> This param match the value used for the `pCloudTrailName` parameter in the `Organization Trail` template
 
 
 # Organization Trail Template
