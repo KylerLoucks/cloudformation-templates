@@ -1,0 +1,116 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Template allows to launch Organizational CloudTrail in all regions with encrypted logs
+
+Parameters:
+
+  pAuditAccountId:
+    Type: String
+    Description: Account ID of the designated Audit account that CloudTrail aggregates logs. (Audit Account needs S3 Bucket template deployed first)
+
+  pCloudTrailName:
+    Type: String
+    Description: Name of the Organization CloudTrail
+    Default: cloudtrail-organization
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterLabels:
+      pAuditAccountId:
+        default: Audit Account Id
+      pCloudTrailName:
+        default: CloudTrail Name
+
+    ParameterGroups:
+      - Label:
+          default: CloudTrail Settings
+        Parameters:
+          - pAuditAccountId
+      
+
+Resources:
+  
+  # =======================
+  # CloudTrail Resources
+  # =======================
+  cloudtrailKms:
+    Type: AWS::KMS::Key
+    Properties:
+      Enabled: true
+      EnableKeyRotation: true
+      Description: Used to encrypt CloudTrail logs in S3
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: !Sub cloudtrail-${AWS::AccountId}-${AWS::Region}
+        Statement:
+          - Effect: Allow
+            Action: kms:GenerateDataKey*
+            Resource: "*"
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Condition:
+              StringLike:
+                kms:EncryptionContext:aws:cloudtrail:arn: !Sub arn:aws:cloudtrail:*:${AWS::AccountId}:trail/*
+            Sid: CloudTrail Log Encryption
+          - Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: kms:DescribeKey
+            Resource:
+              - "*"
+            Sid: CloudTrail KMS Describe
+          - Effect: Allow
+            Action: kms:*
+            Resource: "*"
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Sid: IAM Key Control
+          - Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - kms:Decrypt
+              - kms:ReEncryptFrom
+              - sns:*
+            Resource:
+              - "*"
+            Condition:
+              StringEquals:
+                kms:CallerAccount: !Ref AWS::AccountId
+              StringLike:
+                kms:EncryptionContext:aws:cloudtrail:arn: !Sub arn:aws:cloudtrail:*:${AWS::AccountId}:trail/*
+            Sid: IAM KMS Decrypt Permissions
+      Tags:
+        - Key: controlled-by
+          Value: !Sub cloudformation-${AWS::StackName}
+
+
+
+  cloudtrailKmsAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      TargetKeyId: !Ref cloudtrailKms
+      AliasName: !Sub alias/cloudtrail/${AWS::Region}
+
+
+  cloudtrail:
+    Type: AWS::CloudTrail::Trail
+    Properties:
+      TrailName: !Ref pCloudTrailName
+      IsLogging: true
+      S3BucketName: !Sub cloudtrail-organization-logs-${pAuditAccountId} # Bucket deployed with org trail audit cfn template in into the Audit Account
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      IncludeGlobalServiceEvents: true
+      KMSKeyId: !Ref cloudtrailKms
+      IsOrganizationTrail: true
+
+
+Outputs:
+
+  CloudTrailBucket:
+    Value: !Sub cloudtrail-organization-logs-${pAuditAccountId}
+    Description: S3 Bucket storing CloudTrail logs
+
+  TemplateVersion:
+    Value: cloud303-aws-organization-cloudtrail-0.1
+    Description: Template Version

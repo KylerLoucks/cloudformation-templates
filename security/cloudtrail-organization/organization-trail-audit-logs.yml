@@ -14,7 +14,8 @@ Parameters:
 
   pManagementAccountTrailName:
     Type: String
-    Description: Name of the Organization Management Account's CloudTrail organizational trail
+    Description: Name of the Organization Management Account's organizational CloudTrail
+    Default: cloudtrail-organization
 
   # Hipaa
   pHipaaClient:
@@ -43,6 +44,12 @@ Metadata:
         default: HIPAA Compliance
       pEnvironmentTag:
         default: Environment Tag
+      pManagementAccountId:
+        default: Management Account Id
+      pManagementAccountTrailName:
+        default: Management Account CloudTrail Name
+      pOrganizationId:
+        default: Organization Id
 
     ParameterGroups:
       - Label:
@@ -63,16 +70,15 @@ Conditions:
 
 Resources:
 
-
-  # ==============================================
-  # Access Logging Bucket - CloudTrail and Config
-  # ==============================================
+  # ====================================
+  # Access Logging Bucket - CloudTrail
+  # ====================================
   accessLoggingBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub ${AWS::AccountId}-cloudtrail-s3-access-logging
+      BucketName: !Sub cloudtrail-s3-access-logging-${AWS::AccountId}
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -94,84 +100,42 @@ Resources:
         - Key: Environment
           Value: !Ref pEnvironmentTag
 
-
-  AWSLoggingBucketPolicy:
+  accessLoggingBucketPolicy:
     Type: AWS::S3::BucketPolicy
-    Condition: CondHipaa
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
       Bucket: !Ref accessLoggingBucket
       PolicyDocument:
         Version: 2012-10-17
-        Id: AWSLoggingAccessToBucket
         Statement:
-          - Sid: DenyUnEncryptedObjectUploads
-            Effect: Deny
-            Principal: "*"
-            Action: s3:*
-            Resource: !Join
-              - ""
-              - - !GetAtt
-                  - accessLoggingBucket
-                  - Arn
-                - /*
-            Condition:
-              Bool:
-                "aws:SecureTransport": "false"
-          - Sid: Restrict Delete* Actions
-            Effect: Deny
-            Principal: "*"
-            Action: s3:Delete*
-            Resource: !Join
-              - ""
-              - - !GetAtt
-                  - accessLoggingBucket
-                  - Arn
-                - /*
-          - Sid: DenyUnEncryptedObjectUploads
-            Effect: Deny
-            Principal: "*"
-            Action: s3:PutObject
-            Resource: !Join
-              - ""
-              - - !GetAtt
-                  - accessLoggingBucket
-                  - Arn
-                - /*
-            Condition:
-              StringNotEquals:
-                "s3:x-amz-server-side-encryption": AES256
-          - Sid: AllowLogDelivery
+          # Allow Sending Access Logs from Source Bucket to this bucket
+          - Sid: ServerAccessLogs
             Effect: Allow
-            Principal:
-              Service: "delivery.logs.amazonaws.com"
             Action:
-              - s3:PutObject
-              - s3:GetBucketAcl
+              - s3:putObject
             Resource:
-              - !Join
-                - ""
-                - - !GetAtt
-                    - accessLoggingBucket
-                    - Arn
-                  - /*
+              - !Sub arn:${AWS::Partition}:s3:::${accessLoggingBucket}/logs*
+            Principal:
+              Service: logging.s3.amazonaws.com
             Condition:
+              ArnLike:
+                aws:SourceArn: !Sub arn:${AWS::Partition}:s3:::${cloudtrailBucket}
               StringEquals:
-                "s3:x-amz-acl": "bucket-owner-full-control"
+                aws:SourceAccount: !Ref AWS::AccountId
 
 
+  # Bucket Stores CloudTrail logs for all accounts under the AWS Organization
   cloudtrailBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub cloudtrail-organization-logs-${AWS::AccountId}
-      # BucketEncryption:
-      #   ServerSideEncryptionConfiguration:
-      #     - ServerSideEncryptionByDefault:
-      #         KMSMasterKeyID: !Ref cloudtrailKms
-      #         SSEAlgorithm: aws:kms
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
       LoggingConfiguration:
         DestinationBucketName: !Ref accessLoggingBucket
         LogFilePrefix: !Sub cloudtrail/cloudtrail-${AWS::AccountId}
@@ -195,6 +159,8 @@ Resources:
   # https://docs.aws.amazon.com/awscloudtrail/latest/userguide/create-s3-bucket-policy-for-cloudtrail.html
   cloudtrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       Bucket: !Ref cloudtrailBucket
       PolicyDocument:
@@ -205,21 +171,21 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:GetBucketAcl
-            Resource: !Sub arn:aws:s3:::${cloudtrailBucket}
+            Resource: !Sub arn:${AWS::Partition}:s3:::${cloudtrailBucket}
             Condition:
               StringEquals:
-                aws:SourceArn: !Sub arn:aws:cloudtrail:${AWS::Region}:${pManagementAccountId}:trail/${pManagementAccountTrailName}
+                aws:SourceArn: !Sub arn:${AWS::Partition}:cloudtrail:${AWS::Region}:${pManagementAccountId}:trail/${pManagementAccountTrailName}
 
           - Sid: CloudtrailWrite
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub arn:aws:s3:::${cloudtrailBucket}/AWSLogs/${pManagementAccountId}/*
+            Resource: !Sub arn:${AWS::Partition}:s3:::${cloudtrailBucket}/AWSLogs/${pManagementAccountId}/*
             Condition:
               StringEquals:
                 s3:x-amz-acl: bucket-owner-full-control
-                aws:SourceArn: !Sub arn:aws:cloudtrail:${AWS::Region}:${pManagementAccountId}:trail/${pManagementAccountTrailName}
+                aws:SourceArn: !Sub arn:${AWS::Partition}:cloudtrail:${AWS::Region}:${pManagementAccountId}:trail/${pManagementAccountTrailName}
 
 
           - Sid: CloudtrailOrganizationWrite
@@ -227,27 +193,19 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub arn:aws:s3:::${cloudtrailBucket}/AWSLogs/${pOrganizationId}/*
+            Resource: !Sub arn:${AWS::Partition}:s3:::${cloudtrailBucket}/AWSLogs/${pOrganizationId}/*
             Condition:
               StringEquals:
                 s3:x-amz-acl: bucket-owner-full-control
-                aws:SourceArn: !Sub arn:aws:cloudtrail:${AWS::Region}:${pManagementAccountId}:trail/${pManagementAccountTrailName}
+                aws:SourceArn: !Sub arn:${AWS::Partition}:cloudtrail:${AWS::Region}:${pManagementAccountId}:trail/${pManagementAccountTrailName}
 
-
-          # Possibly redundant to have this.
-          - Sid: DenyUnEncryptedObjectUploads
-            Effect: Deny
-            Principal: "*"
-            Action: s3:*
-            Resource: !Sub arn:aws:s3:::${cloudtrailBucket}/*
-            Condition:
-              Bool:
-                aws:SecureTransport: "false"
           - Sid: Restrict Delete* Actions
             Effect: Deny
             Principal: "*"
             Action: s3:Delete*
-            Resource: !Sub arn:aws:s3:::${cloudtrailBucket}/*
+            Resource: !Sub arn:${AWS::Partition}:s3:::${cloudtrailBucket}/*
+
+
 
 Outputs:
   TemplateVersion:
