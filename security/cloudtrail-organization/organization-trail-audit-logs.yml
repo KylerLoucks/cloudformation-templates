@@ -115,12 +115,10 @@ Resources:
             Action:
               - s3:putObject
             Resource:
-              - !Sub arn:${AWS::Partition}:s3:::${accessLoggingBucket}/logs*
+              - !Sub arn:${AWS::Partition}:s3:::${accessLoggingBucket}/*
             Principal:
               Service: logging.s3.amazonaws.com
             Condition:
-              ArnLike:
-                aws:SourceArn: !Sub arn:${AWS::Partition}:s3:::${cloudtrailBucket}
               StringEquals:
                 aws:SourceAccount: !Ref AWS::AccountId
 
@@ -138,7 +136,7 @@ Resources:
               SSEAlgorithm: AES256
       LoggingConfiguration:
         DestinationBucketName: !Ref accessLoggingBucket
-        LogFilePrefix: !Sub cloudtrail/cloudtrail-${AWS::AccountId}
+        LogFilePrefix: !Sub cloudtrail/cloudtrail-organization-logs-${AWS::AccountId}
       LifecycleConfiguration:
         Rules:
           - Id: cloudtrail-logs-archive-and-delete
